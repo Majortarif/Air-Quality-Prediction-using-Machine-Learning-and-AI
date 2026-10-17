@@ -1,0 +1,129 @@
+{
+  "n_rows": 62188,
+  "features": [
+    "Temp",
+    "Humidity",
+    "PM2.5",
+    "PM10",
+    "NO2",
+    "O3",
+    "CO"
+  ],
+  "rf_params": {
+    "n_estimators": 40,
+    "max_depth": 10,
+    "min_samples_leaf": 5,
+    "random_state": 42
+  },
+  "random_split": {
+    "R2": 0.9998,
+    "RMSE": 0.59,
+    "MAE": 0.008,
+    "n_test": 12438
+  },
+  "time_split": {
+    "R2": 0.9933,
+    "RMSE": 3.407,
+    "MAE": 1.867,
+    "n_test": 12438,
+    "train_until": "2025-12-04 10:07:00",
+    "test_from": "2025-12-04 10:07:00"
+  },
+  "day_split": {
+    "R2": 0.5295,
+    "RMSE": 48.935,
+    "MAE": 32.237,
+    "n_test": 21184,
+    "train_day": "2025-12-03",
+    "test_day": "2025-12-04"
+  },
+  "random_split_dedup": {
+    "R2": 0.9916,
+    "RMSE": 4.254,
+    "MAE": 0.12,
+    "n_test": 7308,
+    "n_rows_after_dedup": 36539
+  },
+  "time_split_no_pm": {
+    "R2": -7.0107,
+    "RMSE": 117.814,
+    "MAE": 106.922,
+    "n_test": 12438
+  },
+  "lgbm_random_split": {
+    "R2": 0.9983,
+    "RMSE": 1.898,
+    "MAE": 0.064,
+    "n_test": 12438
+  },
+  "lgbm_time_split": {
+    "R2": 0.9945,
+    "RMSE": 3.098,
+    "MAE": 2.182,
+    "n_test": 12438
+  },
+  "importance_impurity": {
+    "Temp": 0.0,
+    "Humidity": 0.0,
+    "PM2.5": 0.9678,
+    "PM10": 0.0181,
+    "NO2": 0.0,
+    "O3": 0.0085,
+    "CO": 0.0057
+  },
+  "importance_permutation_R2_drop": {
+    "Temp": 0.0,
+    "Humidity": 0.0,
+    "PM2.5": 1.953,
+    "PM10": 0.0005,
+    "NO2": -0.0,
+    "O3": -0.0,
+    "CO": 0.0
+  },
+  "train_range": {
+    "Temp": [
+      24.3,
+      31.6
+    ],
+    "Humidity": [
+      42.8,
+      63.6
+    ],
+    "PM2.5": [
+      87.0,
+      329.0
+    ],
+    "PM10": [
+      94.0,
+      361.0
+    ],
+    "NO2": [
+      1.004,
+      727.834
+    ],
+    "O3": [
+      0.003,
+      2.705
+    ],
+    "CO": [
+      0.03,
+      13596.484
+    ]
+  },
+  "train_target_range": [
+    167.0,
+    500.0
+  ],
+  "probes": {
+    "thesis_case_study (T25,H50,PM2.5 20,PM10 30,NO2 10,O3 10,CO 0.5)": 167.99,
+    "clean_air (T25,H50,PM2.5 5,PM10 10,NO2 5,O3 20,CO 0.3)": 167.99,
+    "extreme (T30,H60,PM2.5 450,PM10 550,NO2 40,O3 2,CO 1)": 378.03
+  },
+  "model_json_bytes": 307743,
+  "n_nodes_total": 16850,
+  "verify_python": {
+    "rows": 12438,
+    "max_abs_diff": 0.0009217737027142903,
+    "mean_abs_diff": 1.501695704463744e-06
+  }
+}

@@ -1,0 +1,1568 @@
+<title>Dhaka Air Quality Monitor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 34 34%22%3E%3Ccircle cx=%2217%22 cy=%2217%22 r=%2216%22 fill=%22%230a6782%22/%3E%3Cpath d=%22M7 21a10 10 0 0 1 20 0M11 21a6 6 0 0 1 12 0%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<meta name="description" content="Real-time air quality dashboard for Dhaka: US EPA AQI, an in-browser Random Forest model, live Open-Meteo data, your own IoT sensors or a demo simulator.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Hind+Siliguri:wght@400;600&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky top bar -> hero (gauge | model check) -> 7-metric strip -> trends | health -> forecast | what-if -> sensor guide -> thesis */
+:root{
+  --bg:#ecf0f1; --surface:#ffffff; --surface-2:#f3f6f7; --ink:#0f2029; --muted:#526570; --line:#d2dce0;
+  --accent:#0a6782; --accent-soft:#dbecf1; --accent-ink:#ffffff; --shimmer:rgb(255 255 255 / .55);
+  --warn-bg:#fff4e5; --warn-ink:#7a3a00; --warn-line:#f3c58b;
+  --info-bg:#e6f1f6; --info-ink:#0b4a5e; --info-line:#a9d0de;
+  --shadow:0 1px 2px rgb(15 32 41 / .06), 0 10px 28px -16px rgb(15 32 41 / .28);
+  --cat:#9aa9b0; --cat-ink:#0f2029;
+  --f-display:"Bricolage Grotesque","Hind Siliguri",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Hind Siliguri",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  --r-lg:18px; --r-md:12px; --r-sm:8px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a1317; --surface:#111d23; --surface-2:#16252c; --ink:#e4edf0; --muted:#94a8b1; --line:#243840;
+    --accent:#52c2dc; --accent-soft:#143440; --accent-ink:#04202a; --shimmer:rgb(255 255 255 / .07);
+    --warn-bg:#2e1e0b; --warn-ink:#ffd29a; --warn-line:#6b4513;
+    --info-bg:#0f2a33; --info-ink:#a8dcea; --info-line:#1f4b59;
+    --shadow:0 1px 2px rgb(0 0 0 / .4), 0 12px 30px -18px rgb(0 0 0 / .7);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a1317; --surface:#111d23; --surface-2:#16252c; --ink:#e4edf0; --muted:#94a8b1; --line:#243840;
+  --accent:#52c2dc; --accent-soft:#143440; --accent-ink:#04202a; --shimmer:rgb(255 255 255 / .07);
+  --warn-bg:#2e1e0b; --warn-ink:#ffd29a; --warn-line:#6b4513;
+  --info-bg:#0f2a33; --info-ink:#a8dcea; --info-line:#1f4b59;
+  --shadow:0 1px 2px rgb(0 0 0 / .4), 0 12px 30px -18px rgb(0 0 0 / .7);
+  color-scheme:dark;
+}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;scroll-padding-top:120px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+:root[lang="bn"] body{font-family:"Hind Siliguri",var(--f-body)}
+img,svg{max-width:100%}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:1.15rem;font-weight:650}
+h3{font-size:.98rem;font-weight:620}
+p{margin:0}
+a{color:var(--accent)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1240px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.fine{font-size:.8rem;color:var(--muted)}
+.lbl{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+:root[lang="bn"] .lbl{letter-spacing:0;text-transform:none;font-size:.8rem}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar-inner{display:flex;align-items:center;gap:12px;padding-block:10px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);min-width:0;flex:1}
+.brand svg{flex:none}
+.brand-text{display:flex;flex-direction:column;min-width:0}
+.brand-text strong{font-family:var(--f-display);font-size:1.02rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-text small{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-actions{display:flex;gap:6px;align-items:center}
+.icon-btn,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;min-width:40px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600;font-size:.85rem;transition:background .15s,border-color .15s,transform .15s}
+.icon-btn:hover,.btn:hover{border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08)}
+.icon-btn svg,.btn svg{width:18px;height:18px}
+.subnav{display:flex;gap:4px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.subnav::-webkit-scrollbar{display:none}
+.subnav a{flex:none;padding:6px 12px;border-radius:999px;font-size:.84rem;font-weight:500;color:var(--muted);text-decoration:none}
+.subnav a:hover{background:var(--surface);color:var(--ink)}
+
+main{display:flex;flex-direction:column;gap:18px;padding-block:16px 40px}
+.strip{display:flex;flex-direction:column;gap:8px}
+.notice{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-radius:var(--r-md);border:1px solid var(--info-line);background:var(--info-bg);color:var(--info-ink);font-size:.88rem}
+.notice.warn{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn-ink)}
+.notice svg{flex:none;width:18px;height:18px;margin-top:2px}
+.disclaimer{font-size:.8rem;color:var(--muted);display:flex;gap:8px;align-items:flex-start}
+.disclaimer svg{flex:none;width:16px;height:16px;margin-top:2px}
+
+.alert{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;padding:14px 16px;border-radius:var(--r-md);background:color-mix(in srgb,var(--alert-bg,#ff0000) 16%,var(--surface));border:2px solid var(--alert-bg,#ff0000);color:var(--ink);box-shadow:var(--shadow)}
+.alert svg{width:30px;height:30px;grid-row:span 2;padding:5px;border-radius:50%;background:var(--alert-bg,#ff0000);color:var(--alert-ink,#1a0000)}
+.alert strong{font-family:var(--f-display);font-size:1.05rem}
+.alert p{font-size:.9rem}
+.alert .btn{grid-column:2;justify-self:start;margin-top:6px}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;box-shadow:var(--shadow);min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.grid{display:grid;gap:18px;grid-template-columns:1fr}
+.grid>*,.about-grid>*,.guide-grid>*,.gauge-body>*{min-width:0}
+@media (min-width:900px){
+  .hero{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
+  .two{grid-template-columns:minmax(0,8fr) minmax(0,4fr)}
+  .two.top{align-items:start}
+}
+
+/* gauge */
+.gauge-card{position:relative;overflow:hidden}
+.gauge-card::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 100%,color-mix(in srgb,var(--cat) 22%,transparent),transparent 65%);pointer-events:none;transition:background .6s}
+.gauge-card>*{position:relative}
+.src-pill{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+.src-pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.src-pill.live i{background:#16a34a;box-shadow:0 0 0 3px rgb(22 163 74 / .2)}
+.src-pill.sensor i{background:var(--accent)}
+.src-pill.demo i{background:#d97706}
+.gauge-body{display:grid;grid-template-columns:1fr;gap:16px;align-items:center}
+@media (min-width:620px){.gauge-body{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}}
+.gauge-wrap{position:relative;max-width:420px;width:100%;margin-inline:auto}
+.gauge-wrap svg{display:block;width:100%;height:auto}
+.gauge-tick{font:500 10px var(--f-mono);fill:var(--muted)}
+.needle{transform-box:view-box;transform-origin:160px 168px;transition:transform 1s cubic-bezier(.2,.8,.2,1)}
+.needle circle{fill:var(--surface);stroke:var(--ink);stroke-width:4}
+.gauge-readout{position:absolute;left:0;right:0;bottom:4%;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.aqi-num{font-family:var(--f-display);font-weight:700;font-size:clamp(2.6rem,9vw,3.6rem);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.aqi-unit{font-size:.72rem;font-weight:600;letter-spacing:.08em;color:var(--muted)}
+.cat-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--cat);color:var(--cat-ink);font-weight:650;font-family:var(--f-display);font-size:1.05rem}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin:14px 0 0}
+.facts div{min-width:0}
+.facts dt{font-size:.72rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+:root[lang="bn"] .facts dt{text-transform:none;letter-spacing:0;font-size:.8rem}
+.facts dd{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere}
+.side-facts{display:flex;flex-direction:column;gap:12px}
+.weather{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ML card */
+.ml-compare{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:4px}
+.ml-box{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ml-box .big{font-family:var(--f-display);font-size:clamp(1.4rem,4.6vw,1.9rem);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.05}
+.ml-box .lbl{font-size:.66rem}
+.ml-official{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;font-size:.88rem}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none;border:1px solid rgb(0 0 0 / .15)}
+.warn-box{margin-top:12px;padding:10px 12px;border-radius:var(--r-md);background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);font-size:.84rem}
+.model-meta{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.model-meta div{font-size:.8rem;color:var(--muted)}
+.model-meta b{display:block;color:var(--ink);font-family:var(--f-mono);font-weight:500;font-size:.9rem}
+
+/* metric strip */
+.metrics{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.metric{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;box-shadow:var(--shadow);transition:transform .2s,border-color .2s}
+.metric:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.metric.wide{grid-column:span 2}
+.metric header{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.metric h3{font-size:.86rem;font-family:var(--f-body);font-weight:600;color:var(--muted);letter-spacing:.01em}
+.sub-chip{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);white-space:nowrap}
+.metric .val{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap}
+.metric .val .num{font-size:1.6rem;font-weight:500;line-height:1.1}
+.metric .unit{font-size:.8rem;color:var(--muted)}
+.trend{font-size:.78rem;color:var(--muted);display:flex;gap:4px;align-items:center}
+.trend.up.bad{color:#c2410c}.trend.down.bad{color:#15803d}
+:root[data-theme="dark"] .trend.up.bad{color:#fb923c}
+:root[data-theme="dark"] .trend.down.bad{color:#4ade80}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .trend.up.bad{color:#fb923c}:root:not([data-theme="light"]) .trend.down.bad{color:#4ade80}}
+.spark{width:100%;height:30px;display:block}
+.spark polyline{fill:none;stroke:var(--accent);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.spark path{fill:color-mix(in srgb,var(--accent) 14%,transparent);stroke:none}
+@media (min-width:640px){.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (min-width:1100px){.metrics{grid-template-columns:repeat(7,minmax(0,1fr))}.metric.wide{grid-column:span 1}}
+
+/* skeleton */
+.skeleton{position:relative;overflow:hidden;color:transparent!important;min-height:120px}
+.skeleton>*{visibility:hidden}
+.skeleton::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--shimmer),transparent);transform:translateX(-100%);animation:shimmer 1.3s infinite}
+@keyframes shimmer{to{transform:translateX(100%)}}
+
+/* charts */
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;min-height:34px;min-width:48px;padding:0 12px;border-radius:999px;cursor:pointer;font-weight:600;font-size:.82rem;color:var(--muted)}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0 / .12)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:thin}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;min-height:36px;padding:0 12px;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.chart-box{position:relative;height:280px}
+.chart-box canvas{width:100%!important;height:100%!important}
+.chart-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--muted);font-size:.9rem;background:var(--surface-2);border-radius:var(--r-md)}
+.chart-box.skeleton{min-height:280px}
+.chart-note{margin-top:8px}
+
+/* health */
+.persona{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.field .lbl-text{font-size:.78rem;font-weight:600;color:var(--muted)}
+select,input[type="text"],input[type="number"],input[type="url"],input[type="password"]{width:100%;min-height:42px;padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface-2)}
+select:focus,input:focus{border-color:var(--accent)}
+.advice{display:flex;flex-direction:column;gap:12px}
+.advice-head{display:flex;gap:10px;align-items:center}
+.risk{font-size:.74rem;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--cat);color:var(--cat-ink)}
+.advice ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+.advice .emergency{font-size:.82rem;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--line)}
+
+/* what-if */
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.wi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.wi-out{margin-top:14px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.wi-out .ml-box .big{font-size:1.4rem}
+.form-err{color:#b42318;font-size:.84rem;margin-top:8px}
+:root[data-theme="dark"] .form-err{color:#fda29b}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .form-err{color:#fda29b}}
+
+/* guide */
+.guide-grid{display:grid;gap:16px;grid-template-columns:1fr;margin-top:14px}
+@media (min-width:900px){.guide-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.guide-grid .span2{grid-column:span 2}}
+.code-block{position:relative;min-width:0}
+.code-block pre{margin:8px 0 0;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;overflow:auto;max-height:420px;font:500 .78rem/1.55 var(--f-mono);tab-size:2}
+.copy{position:absolute;top:0;right:0;min-height:32px;font-size:.76rem}
+.callout{padding:12px 14px;border-radius:var(--r-md);background:var(--info-bg);border:1px solid var(--info-line);color:var(--info-ink);font-size:.88rem;margin-top:12px}
+.map-list{margin:8px 0 0;padding-left:18px;font-size:.88rem}
+
+/* about */
+.about-grid{display:grid;gap:18px;grid-template-columns:1fr;margin-top:14px}
+@media (min-width:900px){.about-grid{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}}
+.table-scroll{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.74rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+tr.claim td{color:var(--muted);font-style:italic}
+.sensor-list{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.sensor-list li{display:flex;flex-direction:column;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2)}
+.sensor-list b{font-size:.9rem}
+.sensor-list span{font-size:.8rem;color:var(--muted)}
+.diagram-scroll{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2)}
+.diagram-scroll svg{display:block;min-width:720px;width:100%;height:auto}
+.dg-box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.dg-accent{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.2}
+.dg-t{font:600 12px var(--f-body);fill:var(--ink)}
+.dg-s{font:400 10.5px var(--f-body);fill:var(--muted)}
+.dg-line{stroke:var(--muted);stroke-width:1.4;fill:none}
+.dg-dash{stroke-dasharray:5 4}
+.dq{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
+.about-p{max-width:75ch;margin-top:8px}
+
+footer{border-top:1px solid var(--line);padding-block:20px 32px;color:var(--muted);font-size:.8rem}
+footer .wrap{display:flex;flex-direction:column;gap:6px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgb(5 12 16 / .5);z-index:40;opacity:0;transition:opacity .25s}
+.scrim.open{opacity:1}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);z-index:50;background:var(--surface);border-left:1px solid var(--line);box-shadow:-20px 0 40px -20px rgb(0 0 0 / .4);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.drawer.open{transform:none}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+.drawer form{overflow-y:auto;padding:16px 18px 24px;display:flex;flex-direction:column;gap:16px;flex:1}
+fieldset{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px 14px;margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+legend{font-weight:650;font-family:var(--f-display);padding:0 6px}
+.radio-card{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer;align-items:start}
+.radio-card:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.radio-card input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent)}
+.radio-card b{font-size:.92rem}
+.radio-card span{grid-column:2;font-size:.8rem;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+.check input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
+.drawer-actions{display:flex;gap:10px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.88rem;z-index:60;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+
+@media (max-width:520px){
+  .brand-text small{display:none}
+  .btn .btn-label{display:none}
+  .card{padding:14px}
+  .ml-compare,.wi-out{gap:6px}
+  .ml-box{padding:10px 8px}
+  .persona{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+<!--/HEAD-->
+<header class="topbar" id="top">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#dashboard" aria-label="Dhaka Air Quality Monitor, go to dashboard">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="16" fill="var(--accent)"/><path d="M7 21a10 10 0 0 1 20 0" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/><path d="M11 21a6 6 0 0 1 12 0" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" opacity=".7"/><circle cx="17" cy="21" r="2.2" fill="var(--accent-ink)"/></svg>
+      <span class="brand-text"><strong data-i18n="appName">Dhaka Air Quality Monitor</strong><small data-i18n="appSub">Thesis prototype · low-cost sensors + Random Forest</small></span>
+    </a>
+    <div class="top-actions">
+      <button class="icon-btn" id="langBtn" type="button" aria-label="Switch language to Bangla">বাং</button>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch to dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      <button class="btn btn-primary" id="settingsBtn" type="button" aria-haspopup="dialog" aria-controls="drawer" aria-label="Open settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="btn-label" data-i18n="settings">Settings</span></button>
+    </div>
+  </div>
+  <nav class="wrap subnav" aria-label="Page sections">
+    <a href="#dashboard" data-i18n="navDash">Dashboard</a>
+    <a href="#trends" data-i18n="navTrends">Trends</a>
+    <a href="#health" data-i18n="navHealth">Health advice</a>
+    <a href="#model" data-i18n="navModel">Try values</a>
+    <a href="#sensors" data-i18n="navSensors">Connect sensor</a>
+    <a href="#about" data-i18n="navAbout">About the thesis</a>
+  </nav>
+</header>
+
+<main class="wrap" id="main">
+  <div class="strip">
+    <div id="notice" class="notice" role="status" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg><span id="noticeText"></span></div>
+    <p class="disclaimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span data-i18n="disclaimer">Not an official measurement. Values come from a forecast model, low-cost sensors or a simulator and can be wrong. For official data see the Department of Environment (DoE), Bangladesh.</span></p>
+  </div>
+
+  <div id="alert" class="alert" role="alert" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <strong id="alertTitle"></strong>
+    <p id="alertText"></p>
+    <button class="btn" id="alertNotifyBtn" type="button" data-i18n="enableNotif">Turn on browser alerts</button>
+  </div>
+
+  <section id="dashboard" class="grid hero" aria-label="Current air quality">
+    <article class="card gauge-card" aria-labelledby="gaugeTitle">
+      <div class="card-head">
+        <h2 id="gaugeTitle" data-i18n="airNow">Air quality now</h2>
+        <span class="src-pill" id="srcPill"><i></i><span id="srcText">Loading…</span></span>
+      </div>
+      <div class="gauge-body">
+        <div>
+          <div class="gauge-wrap">
+            <svg id="gauge" viewBox="0 0 320 190" role="img" aria-label="AQI gauge, loading">
+              <g id="gaugeArcs"></g>
+              <g id="gaugeTicks"></g>
+              <g class="needle" id="needle"><circle cx="32" cy="168" r="13"/></g>
+            </svg>
+            <div class="gauge-readout"><span class="aqi-num" id="aqiNum" aria-live="polite">--</span><span class="aqi-unit">US AQI</span></div>
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:10px"><span class="cat-chip" id="catChip"><span id="catText">…</span></span></div>
+        </div>
+        <div class="side-facts">
+          <dl class="facts">
+            <div><dt data-i18n="dominantLbl">Dominant pollutant</dt><dd id="dominant">--</dd></div>
+            <div><dt data-i18n="updatedLbl">Last updated</dt><dd id="updated">--</dd></div>
+            <div><dt data-i18n="refreshLbl">Next refresh</dt><dd id="countdown" class="num">30 s</dd></div>
+            <div><dt data-i18n="pollCountLbl">Pollutants used</dt><dd id="pollCount">--</dd></div>
+            <div id="omRow" hidden><dt data-i18n="omLbl">Open-Meteo US AQI (time-averaged)</dt><dd id="omAqi" class="num">--</dd></div>
+          </dl>
+          <p class="fine" data-i18n="aqiNote">AQI uses US EPA breakpoints on the latest concentrations. For each pollutant the higher of the 2024 and pre-2024 EPA tables is used, so the index is never understated. Official AQI uses 24 h (PM) and 8 h (O3, CO) averages, so treat this as a near-real-time estimate.</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="card ml-card" aria-labelledby="mlTitle">
+      <div class="card-head"><h2 id="mlTitle" data-i18n="mlTitle">Random Forest check</h2><span class="src-pill"><i></i><span data-i18n="inBrowser">runs in your browser</span></span></div>
+      <div class="ml-compare">
+        <div class="ml-box"><span class="lbl" data-i18n="mlPredLbl">ML predicted AQI</span><span class="big" id="mlPred">--</span></div>
+        <div class="ml-box"><span class="lbl" data-i18n="mlCalcLbl">Calculated AQI</span><span class="big" id="mlCalc">--</span></div>
+        <div class="ml-box"><span class="lbl" data-i18n="mlDiffLbl">Difference</span><span class="big" id="mlDiff">--</span></div>
+      </div>
+      <p class="fine" style="margin-top:8px" data-i18n="mlCalcNote">"Calculated" uses the same AQI table as the thesis training data (US EPA, pre-2024 PM2.5 breakpoints), so the difference shows model error only.</p>
+      <p class="ml-official" id="mlOfficial"></p>
+      <div id="mlWarn" class="warn-box" hidden></div>
+      <div class="model-meta" id="modelMeta"></div>
+    </article>
+  </section>
+
+  <section class="metrics" id="metrics" aria-label="Pollutant and weather readings">
+    <div class="metric wide skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div><div class="metric skeleton"><span>.</span></div>
+  </section>
+
+  <section id="trends" class="grid two">
+    <article class="card" aria-labelledby="histTitle">
+      <div class="card-head">
+        <h2 id="histTitle" data-i18n="histTitle">History</h2>
+        <div class="seg" role="tablist" aria-label="Time range" id="rangeTabs">
+          <button type="button" role="tab" data-range="1h" aria-selected="false">1h</button>
+          <button type="button" role="tab" data-range="24h" aria-selected="true">24h</button>
+          <button type="button" role="tab" data-range="7d" aria-selected="false">7d</button>
+        </div>
+      </div>
+      <div class="chips" role="group" aria-label="Metric to plot" id="metricChips"></div>
+      <div class="chart-box skeleton" id="histBox"><canvas id="histChart" role="img" aria-label="History chart"></canvas><div class="chart-empty" id="histEmpty" hidden></div></div>
+      <p class="fine chart-note" id="histNote"></p>
+    </article>
+
+    <article id="health" class="card" aria-labelledby="healthTitle">
+      <div class="card-head"><h2 id="healthTitle" data-i18n="healthTitle">Health advice</h2></div>
+      <div class="persona">
+        <div class="field"><label for="age" data-i18n="ageLbl">Age group</label>
+          <select id="age"><option value="child" data-i18n="ageChild">Child (under 18)</option><option value="adult" data-i18n="ageAdult">Adult (18–59)</option><option value="senior" data-i18n="ageSenior">Older adult (60+)</option></select></div>
+        <div class="field"><label for="cond" data-i18n="condLbl">Health condition</label>
+          <select id="cond"><option value="none" data-i18n="condNone">None</option><option value="asthma" data-i18n="condAsthma">Asthma / lung disease</option><option value="heart" data-i18n="condHeart">Heart disease</option></select></div>
+      </div>
+      <div class="advice" id="advice" aria-live="polite"></div>
+    </article>
+  </section>
+
+  <section class="grid two top">
+    <article class="card" aria-labelledby="fcTitle">
+      <div class="card-head"><h2 id="fcTitle" data-i18n="fcTitle">Next 24 hours</h2><span class="src-pill" id="fcPill"><i></i><span id="fcSrc">--</span></span></div>
+      <div class="chart-box skeleton" id="fcBox"><canvas id="fcChart" role="img" aria-label="24 hour AQI forecast chart"></canvas><div class="chart-empty" id="fcEmpty" hidden></div></div>
+      <p class="fine chart-note" id="fcNote"></p>
+    </article>
+
+    <article id="model" class="card" aria-labelledby="wiTitle">
+      <div class="card-head"><h2 id="wiTitle" data-i18n="whatifTitle">Try your own values</h2></div>
+      <div class="presets" role="group" aria-label="Example inputs">
+        <button class="chip" type="button" data-preset="thesis" data-i18n="presetThesis">Thesis Ch. 5 example</button>
+        <button class="chip" type="button" data-preset="median" data-i18n="presetMedian">Dataset median</button>
+        <button class="chip" type="button" data-preset="clean" data-i18n="presetClean">Clean air</button>
+        <button class="chip" type="button" data-preset="haz" data-i18n="presetHaz">Severe haze</button>
+        <button class="chip" type="button" data-preset="now" data-i18n="presetNow">Current reading</button>
+      </div>
+      <form id="wiForm" novalidate>
+        <div class="wi-grid" id="wiGrid"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary" type="submit" data-i18n="calcBtn">Calculate</button>
+          <span class="fine" id="wiPresetNote"></span>
+        </div>
+        <p class="form-err" id="wiErr" role="alert" hidden></p>
+      </form>
+      <div class="wi-out" id="wiOut" aria-live="polite"></div>
+      <div class="warn-box" id="wiWarn" hidden></div>
+    </article>
+  </section>
+
+  <section id="sensors" class="card" aria-labelledby="sensorTitle">
+    <h2 id="sensorTitle" data-i18n="sensorTitle">Connect my sensor</h2>
+    <p class="about-p" data-i18n="sensorIntro">Send one JSON reading every 30 seconds to a Supabase table (or a ThingSpeak channel), then open Settings, choose "My sensors" and paste the URL and read key. The thesis node used an Arduino UNO, which has no WiFi. For live upload use an ESP32 (or ESP8266) as the controller, or add an ESP module beside the UNO.</p>
+    <div class="guide-grid">
+      <div class="code-block"><h3 data-i18n="g1">1. Reading format (JSON)</h3><button class="btn copy" type="button" data-copy="schemaCode" data-i18n="copy">Copy</button><pre><code id="schemaCode"></code></pre></div>
+      <div class="code-block"><h3 data-i18n="g2">2. Supabase table (SQL editor)</h3><button class="btn copy" type="button" data-copy="sqlCode" data-i18n="copy">Copy</button><pre><code id="sqlCode"></code></pre></div>
+      <div class="code-block span2"><h3 data-i18n="g3">3. ESP32 sketch (Arduino IDE)</h3><button class="btn copy" type="button" data-copy="sketchCode" data-i18n="copy">Copy</button><pre><code id="sketchCode"></code></pre>
+        <p class="callout" data-i18n="sketchNote">The gas conversion functions are placeholders. MQ-7, MQ-131 and the MEMS NO2 module need calibration against a reference instrument before their numbers mean anything. MQ modules output up to 5 V, so use a voltage divider on ESP32 inputs (3.3 V maximum), and use ADC1 pins because ADC2 is unavailable while WiFi is on.</p></div>
+      <div><h3 data-i18n="g4">ThingSpeak option</h3>
+        <p class="fine" style="margin-top:6px" data-i18n="tsIntro">Write the reading to channel fields in this order. In Settings choose ThingSpeak and enter the channel ID and read API key.</p>
+        <ol class="map-list"><li>field1 = PM2.5 (µg/m³)</li><li>field2 = PM10 (µg/m³)</li><li>field3 = NO2 (ppb)</li><li>field4 = O3 (ppb)</li><li>field5 = CO (ppm)</li><li>field6 = Temperature (°C)</li><li>field7 = Humidity (%)</li></ol>
+      </div>
+      <div><h3 data-i18n="g5">Security notes</h3>
+        <ul class="map-list"><li data-i18n="sec1">Put only the Supabase anon key in the page or device, never the service_role key.</li><li data-i18n="sec2">Keep Row Level Security on. The SQL above allows public read and insert; for a real deployment restrict inserts to your device (for example through an Edge Function).</li><li data-i18n="sec3">Keys typed into Settings stay in this browser's localStorage only.</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" class="card" aria-labelledby="aboutTitle">
+    <h2 id="aboutTitle" data-i18n="aboutTitle">About the thesis</h2>
+    <p class="about-p" id="aboutText"></p>
+    <div class="about-grid">
+      <div>
+        <h3 data-i18n="measuredTitle">Model results, re-measured from the thesis dataset</h3>
+        <div class="table-scroll"><table id="metricsTable"><thead><tr><th data-i18n="thEval">Evaluation</th><th class="n">R²</th><th class="n">RMSE</th><th class="n">MAE</th><th class="n" data-i18n="thRows">Test rows</th></tr></thead><tbody></tbody></table></div>
+        <p class="fine" style="margin-top:8px" id="metricsNote"></p>
+        <h3 style="margin-top:16px" data-i18n="impTitle">Feature importance (Random Forest, impurity)</h3>
+        <div class="table-scroll"><table id="impTable"><tbody></tbody></table></div>
+      </div>
+      <div>
+        <h3 data-i18n="sensorsUsed">Sensors in the thesis node</h3>
+        <ul class="sensor-list">
+          <li><b>PMSA003</b><span data-i18n="sPms">Laser particle counter: PM1.0, PM2.5, PM10 (µg/m³), UART</span></li>
+          <li><b>MQ-7</b><span data-i18n="sMq7">Metal-oxide CO sensor (ppm), analog</span></li>
+          <li><b>MQ-131</b><span data-i18n="sMq131">Metal-oxide O3 sensor (ppb), analog</span></li>
+          <li><b>Fermion MEMS NO2</b><span data-i18n="sNo2">MEMS NO2 sensor (ppb), DFRobot SEN0574</span></li>
+          <li><b>DHT22 (AM2302)</b><span data-i18n="sDht">Temperature (°C) and relative humidity (%)</span></li>
+          <li><b>Arduino UNO R3</b><span data-i18n="sUno">Controller in the thesis; logs over USB serial (no WiFi)</span></li>
+        </ul>
+      </div>
+    </div>
+    <h3 style="margin-top:18px" data-i18n="archTitle">System architecture</h3>
+    <div class="diagram-scroll">
+      <svg viewBox="0 0 760 300" role="img" aria-labelledby="archDesc">
+        <title id="archDesc">Sensors feed a microcontroller; readings go to a CSV logger for training or to a cloud table for live use. A Python training step exports the Random Forest as JSON. The browser app combines the cloud table, Open-Meteo data or the demo simulator, computes the EPA AQI, runs the model and shows alerts.</title>
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--muted)"/></marker></defs>
+        <rect class="dg-box" x="16" y="20" width="150" height="150" rx="10"/>
+        <text class="dg-t" x="30" y="44">Sensor node</text>
+        <text class="dg-s" x="30" y="66">PMSA003 · PM2.5/PM10</text>
+        <text class="dg-s" x="30" y="84">MQ-7 · CO</text>
+        <text class="dg-s" x="30" y="102">MQ-131 · O3</text>
+        <text class="dg-s" x="30" y="120">MEMS · NO2</text>
+        <text class="dg-s" x="30" y="138">DHT22 · temp, RH</text>
+        <text class="dg-s" x="30" y="158">every ~30 s</text>
+        <rect class="dg-box" x="206" y="20" width="150" height="70" rx="10"/>
+        <text class="dg-t" x="220" y="44">Microcontroller</text>
+        <text class="dg-s" x="220" y="62">Arduino UNO (thesis)</text>
+        <text class="dg-s" x="220" y="78">ESP32 for WiFi upload</text>
+        <rect class="dg-box" x="206" y="200" width="150" height="70" rx="10"/>
+        <text class="dg-t" x="220" y="224">CSV logger</text>
+        <text class="dg-s" x="220" y="242">Python, timestamps</text>
+        <text class="dg-s" x="220" y="258">62,188-row dataset</text>
+        <rect class="dg-box" x="396" y="20" width="150" height="70" rx="10"/>
+        <text class="dg-t" x="410" y="44">Cloud table</text>
+        <text class="dg-s" x="410" y="62">Supabase "readings"</text>
+        <text class="dg-s" x="410" y="78">or ThingSpeak</text>
+        <rect class="dg-box" x="396" y="200" width="150" height="70" rx="10"/>
+        <text class="dg-t" x="410" y="224">Model training</text>
+        <text class="dg-s" x="410" y="242">scikit-learn RF</text>
+        <text class="dg-s" x="410" y="258">exported to JSON</text>
+        <rect class="dg-box" x="396" y="110" width="150" height="70" rx="10"/>
+        <text class="dg-t" x="410" y="134">Open-Meteo API</text>
+        <text class="dg-s" x="410" y="152">CAMS model, hourly</text>
+        <text class="dg-s" x="410" y="168">or demo simulator</text>
+        <rect class="dg-accent" x="586" y="20" width="158" height="250" rx="12"/>
+        <text class="dg-t" x="600" y="46">This web app</text>
+        <text class="dg-s" x="600" y="72">EPA AQI sub-indices</text>
+        <text class="dg-s" x="600" y="92">overall AQI = max</text>
+        <text class="dg-s" x="600" y="118">Random Forest (JSON)</text>
+        <text class="dg-s" x="600" y="138">ML vs formula check</text>
+        <text class="dg-s" x="600" y="164">History + forecast</text>
+        <text class="dg-s" x="600" y="190">Health advice</text>
+        <text class="dg-s" x="600" y="216">Alerts + notifications</text>
+        <text class="dg-s" x="600" y="250">static file, no backend</text>
+        <path class="dg-line" d="M166 55H204" marker-end="url(#arr)"/>
+        <path class="dg-line" d="M281 90V198" marker-end="url(#arr)"/>
+        <path class="dg-line" d="M356 55H394" marker-end="url(#arr)"/>
+        <path class="dg-line" d="M356 235H394" marker-end="url(#arr)"/>
+        <path class="dg-line" d="M546 55H584" marker-end="url(#arr)"/>
+        <path class="dg-line" d="M546 145H584" marker-end="url(#arr)"/>
+        <path class="dg-line dg-dash" d="M546 235H584" marker-end="url(#arr)"/>
+      </svg>
+    </div>
+    <h3 style="margin-top:18px" data-i18n="dqTitle">Data quality findings</h3>
+    <ul class="dq" id="dqList"></ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p data-i18n="footer1">Not an official air quality measurement. Do not use it for medical or safety decisions on its own.</p>
+    <p>Live data: <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener">Open-Meteo Air Quality API</a> (CAMS, CC BY 4.0). Charts: Chart.js.</p>
+    <p data-i18n="footer2">CSE400C capstone, East West University · Air Quality Prediction Using Machine Learning · Tariful Hoque, MD. Arshad Faysal, Monisha Bani Nibedita Shuci.</p>
+  </div>
+</footer>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden>
+  <div class="drawer-head"><h2 id="drawerTitle" data-i18n="settings">Settings</h2><button class="icon-btn" type="button" id="closeDrawer" aria-label="Close settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <form id="settingsForm" novalidate>
+    <fieldset>
+      <legend data-i18n="srcLegend">Data source</legend>
+      <label class="radio-card"><input type="radio" name="mode" value="live" id="modeLive"><b data-i18n="modeLive">Live Dhaka</b><span data-i18n="modeLiveD">Open-Meteo air quality model, updated hourly, no key needed.</span></label>
+      <label class="radio-card"><input type="radio" name="mode" value="sensors" id="modeSensors"><b data-i18n="modeSensors">My sensors</b><span data-i18n="modeSensorsD">Reads your own IoT readings from Supabase, ThingSpeak or a JSON URL.</span></label>
+      <label class="radio-card"><input type="radio" name="mode" value="demo" id="modeDemo"><b data-i18n="modeDemo">Demo simulator</b><span data-i18n="modeDemoD">Simulated Dhaka-range values for presentations. Not real data.</span></label>
+    </fieldset>
+    <fieldset id="fsLive">
+      <legend data-i18n="siteLegend">Location</legend>
+      <div class="field"><label for="site" data-i18n="siteLbl">Preset</label><select id="site"><option value="dhaka">Dhaka city</option><option value="badda">Badda</option><option value="aftabnagar">Aftabnagar</option></select></div>
+      <p class="fine" data-i18n="siteNote">Open-Meteo's global model grid is coarse (about 40 km), so the three presets may show the same values.</p>
+    </fieldset>
+    <fieldset id="fsSensors">
+      <legend data-i18n="sensorLegend">My sensor endpoint</legend>
+      <div class="field"><label for="sType" data-i18n="sTypeLbl">Service</label><select id="sType"><option value="supabase">Supabase REST</option><option value="thingspeak">ThingSpeak</option><option value="custom">Custom JSON URL</option></select></div>
+      <div class="field" id="fUrl"><label for="sUrl">Project URL</label><input type="url" id="sUrl" placeholder="https://YOUR-PROJECT.supabase.co" autocomplete="off" spellcheck="false"></div>
+      <div class="field" id="fTable"><label for="sTable" data-i18n="sTableLbl">Table</label><input type="text" id="sTable" placeholder="readings" autocomplete="off" spellcheck="false"></div>
+      <div class="field" id="fChannel"><label for="sChannel" data-i18n="sChannelLbl">Channel ID</label><input type="text" id="sChannel" inputmode="numeric" placeholder="1234567" autocomplete="off"></div>
+      <div class="field" id="fKey"><label for="sKey" id="sKeyLbl">Anon key</label><input type="password" id="sKey" placeholder="YOUR_ANON_KEY" autocomplete="off" spellcheck="false"></div>
+      <div class="field" id="fSite"><label for="sSite" data-i18n="sSiteLbl">Site filter (optional)</label><input type="text" id="sSite" placeholder="badda" autocomplete="off" spellcheck="false"></div>
+    </fieldset>
+    <fieldset id="fsDemo">
+      <legend data-i18n="demoLegend">Demo scenario (also used if live data fails)</legend>
+      <div class="field"><label for="demoScen" data-i18n="demoLbl">Scenario</label><select id="demoScen"><option value="typical" data-i18n="scTypical">Typical Dhaka day</option><option value="haze" data-i18n="scHaze">Winter haze (hazardous peaks)</option><option value="clean" data-i18n="scClean">After rain (cleaner air)</option></select></div>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="alertLegend">Alerts</legend>
+      <label class="check"><input type="checkbox" id="notify"><span data-i18n="notifyLbl">Browser notification when AQI reaches Unhealthy (151) or worse</span></label>
+      <p class="fine" id="notifyStatus"></p>
+    </fieldset>
+    <div class="drawer-actions">
+      <button class="btn btn-primary" type="submit" data-i18n="saveBtn">Save and refresh</button>
+      <button class="btn" type="button" id="resetBtn" data-i18n="resetBtn">Reset settings</button>
+    </div>
+  </form>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="text/plain" id="schemaSrc">{
+  "created_at": "2026-10-18T10:15:00Z",
+  "site": "badda",
+  "pm25": 85.0,
+  "pm10": 132.0,
+  "no2_ppb": 22.4,
+  "o3_ppb": 18.0,
+  "co_ppm": 0.8,
+  "temp_c": 29.1,
+  "humidity": 64.0
+}
+// Units: pm25/pm10 µg/m³, no2_ppb and o3_ppb in ppb, co_ppm in ppm,
+// temp_c in °C, humidity in %. created_at is ISO 8601 (UTC).
+// Missing sensor? Leave the field out; the AQI then uses the rest
+// and the page says how many pollutants were used.</script>
+<script type="text/plain" id="sqlSrc">create table public.readings (
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz not null default now(),
+  site        text,
+  pm25        real,
+  pm10        real,
+  no2_ppb     real,
+  o3_ppb      real,
+  co_ppm      real,
+  temp_c      real,
+  humidity    real
+);
+create index on public.readings (created_at desc);
+
+alter table public.readings enable row level security;
+create policy "public read"   on public.readings for select using (true);
+create policy "device insert" on public.readings for insert with check (true);
+
+-- Read URL used by this page:
+-- https://YOUR-PROJECT.supabase.co/rest/v1/readings?select=*&order=created_at.desc&limit=500</script>
+<script type="text/plain" id="sketchSrc">// ESP32 -> Supabase "readings" table, one reading every 30 s.
+// Arduino UNO has no WiFi: use an ESP32 (or ESP8266) for upload.
+// Libraries (Library Manager): "Adafruit PM25 AQI Sensor",
+// "DHT sensor library" (Adafruit), "ArduinoJson" (v7).
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Adafruit_PM25AQI.h>
+#include <DHT.h>
+
+const char* WIFI_SSID   = "YOUR_WIFI";
+const char* WIFI_PASS   = "YOUR_WIFI_PASSWORD";
+const char* INSERT_URL  = "https://YOUR-PROJECT.supabase.co/rest/v1/readings";
+const char* ANON_KEY    = "YOUR_ANON_KEY";   // anon key only, never service_role
+const char* SITE        = "badda";
+
+#define PIN_DHT   4
+#define PIN_MQ7   34   // ADC1 pins only (ADC2 is busy while WiFi runs)
+#define PIN_MQ131 35
+#define PIN_NO2   32
+#define PMS_RX    16   // PMSA003 TX -> GPIO16
+#define PMS_TX    17   // PMSA003 RX <- GPIO17
+
+DHT dht(PIN_DHT, DHT22);
+Adafruit_PM25AQI pms;
+
+// Placeholders: replace with curves from your own calibration.
+float volts(int pin)    { return analogRead(pin) * 3.3f / 4095.0f; }
+float mq7Ppm(float v)   { return v * 10.0f; }   // TODO calibrate
+float mq131Ppb(float v) { return v * 20.0f; }   // TODO calibrate
+float no2Ppb(float v)   { return v * 50.0f; }   // TODO calibrate
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, PMS_RX, PMS_TX);
+  dht.begin();
+  if (!pms.begin_UART(&Serial2)) Serial.println("PMSA003 not found");
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print('.'); }
+  Serial.println(" WiFi connected");
+}
+
+void loop() {
+  PM25_AQI_Data pm;
+  if (!pms.read(&pm)) { delay(1000); return; }
+
+  JsonDocument doc;
+  doc["site"]    = SITE;
+  doc["pm25"]    = pm.pm25_env;
+  doc["pm10"]    = pm.pm100_env;
+  doc["no2_ppb"] = no2Ppb(volts(PIN_NO2));
+  doc["o3_ppb"]  = mq131Ppb(volts(PIN_MQ131));
+  doc["co_ppm"]  = mq7Ppm(volts(PIN_MQ7));
+  float t = dht.readTemperature(), h = dht.readHumidity();
+  if (!isnan(t)) doc["temp_c"] = t;
+  if (!isnan(h)) doc["humidity"] = h;
+  String body;
+  serializeJson(doc, body);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();  // skips certificate check; use setCACert() in production
+    HTTPClient http;
+    http.begin(client, INSERT_URL);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", ANON_KEY);
+    http.addHeader("Authorization", String("Bearer ") + ANON_KEY);
+    http.addHeader("Prefer", "return=minimal");
+    int code = http.POST(body);
+    Serial.printf("POST %d %s\n", code, body.c_str());
+    http.end();
+  }
+  delay(30000);
+}</script>
+<script type="application/json" id="rf-model">/*__MODEL__*/</script>
+<script type="application/json" id="rf-meta">/*__META__*/</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+const MODEL = JSON.parse($('#rf-model').textContent);
+const META = JSON.parse($('#rf-meta').textContent);
+const REFRESH_MS = 30000;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- settings (localStorage, always guarded) ---------- */
+const STORE_KEY = 'aqm:v1:settings';
+const DEFAULTS = { mode: 'live', site: 'dhaka', lang: 'en', theme: null, age: 'adult', cond: 'none', notify: false,
+  demo: 'typical', metric: 'aqi', range: '24h', sensor: { type: 'supabase', url: '', key: '', table: 'readings', channel: '', site: '' } };
+const clone = (o) => JSON.parse(JSON.stringify(o));
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return clone(DEFAULTS);
+    const s = JSON.parse(raw);
+    return { ...clone(DEFAULTS), ...s, sensor: { ...DEFAULTS.sensor, ...(s.sensor || {}) } };
+  } catch (e) { return clone(DEFAULTS); }
+}
+function saveSettings() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* storage blocked */ } }
+const S = loadSettings();
+
+/* ---------- i18n ---------- */
+const EN_DOM = {};
+$$('[data-i18n]').forEach((el) => { EN_DOM[el.dataset.i18n] = el.textContent; });
+const T = {
+  en: {
+    loading: 'Loading…', srcLive: 'Live · Open-Meteo · {site}', srcSensor: 'My sensor · {type}', srcDemo: 'Demo · simulated',
+    srcFallback: 'Demo fallback · simulated', noticeDemo: 'Demo mode: these values are simulated for presentation. They are not measurements.',
+    noticeLiveFail: 'Live data could not be loaded ({err}). Showing the demo simulator instead; retrying every 30 s.',
+    noticeSensorFail: 'Sensor data could not be loaded ({err}). Showing the demo simulator instead; retrying every 30 s.',
+    staleLive: 'The latest live value is {age} old.', staleSensor: 'The latest sensor reading is {age} old. Check that your device is online.',
+    errSensorCfg: 'endpoint not configured: open Settings > My sensors', errNoRows: 'no valid readings returned', errTimeout: 'request timed out',
+    errShape: 'unexpected response format', vs1h: 'vs 1 h ago', vsPrev: 'vs previous reading', steady: 'steady', noPrev: 'no earlier reading',
+    of5: '{n} of 5', partial: 'Only {n} of 5 pollutants available; the true AQI may be higher.',
+    beyond: 'Beyond the AQI scale (500+)', mlOut: 'Input outside the training range for: {list}. The model was trained only on Dhaka data with AQI {lo}–{hi}, so it cannot predict lower or higher values. Trust the calculated AQI.',
+    mlMissing: 'ML needs all 7 inputs (temperature and humidity included); some are missing.', officialLbl: 'Dashboard AQI (EPA, safety rule):',
+    alertUnh: 'Unhealthy air', alertVu: 'Very unhealthy air', alertHaz: 'Hazardous air: stay indoors', alertUsg: 'Unhealthy for sensitive groups',
+    alertBody: 'AQI {aqi} ({cat}). {advice} Source: {src}.', demoTag: 'DEMO: ', notifUnsupported: 'This browser does not support notifications.',
+    notifDenied: 'Notifications are blocked for this site. Allow them in your browser settings.', notifOn: 'Notifications are on.', notifOff: 'Notifications are off.',
+    histLive1h: 'Open-Meteo updates hourly, so the 1 h view has very few points. Use 24 h or 7 d.', histDemo: 'Simulated history.',
+    histSensor: '{n} readings from your endpoint.', histLive: 'Hourly values from Open-Meteo (CAMS model).', histEmpty: 'No data for this range yet.',
+    fcLive: 'Calculated AQI from hourly forecast concentrations, with Open-Meteo\'s own time-averaged US AQI for comparison.',
+    fcDemo: 'Simulated forecast for the demo scenario.', fcSensor: 'Forecasts need the Live Dhaka mode. Your sensors only report the past.',
+    fcSrcLive: 'Open-Meteo forecast', fcSrcDemo: 'Simulated', fcSrcNone: 'Not available', calcAqi: 'Calculated AQI', omAqiSeries: 'Open-Meteo US AQI',
+    timeDhaka: 'Dhaka time (GMT+6)', wiThesis: 'Inputs from thesis section 5.1.5.3 (CO not given; 0.5 ppm assumed). The thesis app reported AQI 167.77 for this input.',
+    wiMedian: 'Median of each column in AQI_Ready_For_Streamlit.csv.', wiClean: 'Illustrative clean-air values.', wiHaz: 'Illustrative severe winter haze.',
+    wiNow: 'Values from the current reading.', wiErr: 'Enter a number (0 or more) in every field.', epa2024: 'Dashboard AQI', thesisAqi: 'Thesis-method AQI',
+    mlAqi: 'ML prediction', copied: 'Copied', copyFail: 'Copy failed. Select the text and copy it manually.', saved: 'Settings saved',
+    reset: 'Settings reset', yourRisk: 'For you', updatedAgo: '{t} ({ago})', justNow: 'just now', ago: '{d} ago',
+    emergency: 'Severe breathlessness, chest pain or confusion: call 999 (Bangladesh national emergency) or go to the nearest hospital.',
+    dSuffix: 'd', hSuffix: 'h', mSuffix: 'min', sensitiveNote: 'Advice for sensitive groups applies to you.',
+  },
+  bn: {
+    appName: 'ঢাকা বায়ুমান মনিটর', appSub: 'থিসিস প্রোটোটাইপ · লো-কস্ট সেন্সর + র‍্যান্ডম ফরেস্ট', settings: 'সেটিংস',
+    navDash: 'ড্যাশবোর্ড', navTrends: 'ট্রেন্ড', navHealth: 'স্বাস্থ্য পরামর্শ', navModel: 'মান যাচাই', navSensors: 'সেন্সর যুক্ত করুন', navAbout: 'থিসিস',
+    disclaimer: 'এটি সরকারি পরিমাপ নয়। মান আসে পূর্বাভাস মডেল, লো-কস্ট সেন্সর বা সিমুলেটর থেকে এবং ভুল হতে পারে। সরকারি তথ্যের জন্য পরিবেশ অধিদপ্তর (DoE) দেখুন।',
+    airNow: 'এখনকার বায়ুমান', dominantLbl: 'প্রধান দূষক', updatedLbl: 'সর্বশেষ আপডেট', refreshLbl: 'পরবর্তী রিফ্রেশ', pollCountLbl: 'ব্যবহৃত দূষক',
+    omLbl: 'Open-Meteo US AQI (গড়)', aqiNote: 'AQI হিসাব হয়েছে সর্বশেষ ঘনত্বের উপর US EPA ব্রেকপয়েন্ট দিয়ে। প্রতিটি দূষকের জন্য ২০২৪ ও আগের EPA টেবিলের মধ্যে বড় মানটি নেওয়া হয়, তাই সূচক কখনো কম দেখায় না। সরকারি AQI ২৪ ঘণ্টা ও ৮ ঘণ্টার গড় ব্যবহার করে, তাই এটি কাছাকাছি-রিয়েল-টাইম অনুমান।',
+    mlTitle: 'র‍্যান্ডম ফরেস্ট যাচাই', inBrowser: 'আপনার ব্রাউজারে চলে', mlPredLbl: 'ML অনুমিত AQI', mlCalcLbl: 'হিসাবকৃত AQI', mlDiffLbl: 'পার্থক্য',
+    mlCalcNote: '"হিসাবকৃত" AQI থিসিস ডেটার একই টেবিল (US EPA, ২০২৪-এর আগের PM2.5 ব্রেকপয়েন্ট) ব্যবহার করে, তাই পার্থক্যটি শুধু মডেলের ভুল দেখায়।',
+    enableNotif: 'ব্রাউজার অ্যালার্ট চালু করুন', histTitle: 'ইতিহাস', healthTitle: 'স্বাস্থ্য পরামর্শ', ageLbl: 'বয়স', condLbl: 'স্বাস্থ্য অবস্থা',
+    ageChild: 'শিশু (১৮-এর নিচে)', ageAdult: 'প্রাপ্তবয়স্ক (১৮–৫৯)', ageSenior: 'বয়স্ক (৬০+)', condNone: 'নেই', condAsthma: 'হাঁপানি / ফুসফুসের রোগ', condHeart: 'হৃদরোগ',
+    fcTitle: 'আগামী ২৪ ঘণ্টা', whatifTitle: 'নিজের মান দিয়ে দেখুন', presetThesis: 'থিসিস অধ্যায় ৫-এর উদাহরণ', presetMedian: 'ডেটাসেটের মিডিয়ান',
+    presetClean: 'পরিষ্কার বাতাস', presetHaz: 'তীব্র ধোঁয়াশা', presetNow: 'বর্তমান রিডিং', calcBtn: 'হিসাব করুন',
+    sensorTitle: 'আমার সেন্সর যুক্ত করুন', copy: 'কপি', aboutTitle: 'থিসিস সম্পর্কে', measuredTitle: 'থিসিস ডেটাসেট থেকে আবার মাপা মডেল ফলাফল',
+    thEval: 'মূল্যায়ন', thRows: 'টেস্ট সারি', impTitle: 'ফিচার গুরুত্ব (র‍্যান্ডম ফরেস্ট)', sensorsUsed: 'থিসিস নোডের সেন্সর', archTitle: 'সিস্টেম আর্কিটেকচার',
+    dqTitle: 'ডেটার মান নিয়ে পর্যবেক্ষণ', footer1: 'এটি সরকারি বায়ুমান পরিমাপ নয়। শুধু এর উপর ভিত্তি করে চিকিৎসা বা নিরাপত্তার সিদ্ধান্ত নেবেন না।',
+    srcLegend: 'ডেটার উৎস', modeLive: 'লাইভ ঢাকা', modeSensors: 'আমার সেন্সর', modeDemo: 'ডেমো সিমুলেটর',
+    modeLiveD: 'Open-Meteo বায়ুমান মডেল, প্রতি ঘণ্টায় আপডেট, কোনো কী লাগে না।', modeSensorsD: 'Supabase, ThingSpeak বা JSON URL থেকে আপনার IoT রিডিং পড়ে।',
+    modeDemoD: 'প্রেজেন্টেশনের জন্য সিমুলেটেড ঢাকার মান। আসল ডেটা নয়।', siteLegend: 'অবস্থান', siteLbl: 'প্রিসেট',
+    siteNote: 'Open-Meteo-র গ্লোবাল মডেলের গ্রিড বড় (প্রায় ৪০ কিমি), তাই তিনটি প্রিসেটে একই মান দেখাতে পারে।', sensorLegend: 'আমার সেন্সরের এন্ডপয়েন্ট',
+    demoLegend: 'ডেমো পরিস্থিতি (লাইভ ডেটা না এলেও ব্যবহৃত)', demoLbl: 'পরিস্থিতি', scTypical: 'সাধারণ ঢাকার দিন', scHaze: 'শীতের ধোঁয়াশা (ঝুঁকিপূর্ণ চূড়া)', scClean: 'বৃষ্টির পরে (পরিষ্কার বাতাস)',
+    alertLegend: 'অ্যালার্ট', notifyLbl: 'AQI অস্বাস্থ্যকর (১৫১) বা তার বেশি হলে ব্রাউজার নোটিফিকেশন', saveBtn: 'সেভ করে রিফ্রেশ', resetBtn: 'সেটিংস রিসেট',
+    loading: 'লোড হচ্ছে…', srcLive: 'লাইভ · Open-Meteo · {site}', srcSensor: 'আমার সেন্সর · {type}', srcDemo: 'ডেমো · সিমুলেটেড', srcFallback: 'ডেমো (বিকল্প) · সিমুলেটেড',
+    noticeDemo: 'ডেমো মোড: এই মানগুলো প্রেজেন্টেশনের জন্য সিমুলেটেড, আসল পরিমাপ নয়।',
+    noticeLiveFail: 'লাইভ ডেটা লোড হয়নি ({err})। এর বদলে ডেমো সিমুলেটর দেখানো হচ্ছে; প্রতি ৩০ সেকেন্ডে আবার চেষ্টা হবে।',
+    noticeSensorFail: 'সেন্সর ডেটা লোড হয়নি ({err})। এর বদলে ডেমো সিমুলেটর দেখানো হচ্ছে; প্রতি ৩০ সেকেন্ডে আবার চেষ্টা হবে।',
+    vs1h: '১ ঘণ্টা আগের তুলনায়', vsPrev: 'আগের রিডিংয়ের তুলনায়', steady: 'স্থির', noPrev: 'আগের রিডিং নেই',
+    alertUnh: 'অস্বাস্থ্যকর বাতাস', alertVu: 'খুব অস্বাস্থ্যকর বাতাস', alertHaz: 'ঝুঁকিপূর্ণ বাতাস: ঘরে থাকুন', alertUsg: 'সংবেদনশীলদের জন্য অস্বাস্থ্যকর',
+    yourRisk: 'আপনার জন্য', emergency: 'তীব্র শ্বাসকষ্ট, বুকে ব্যথা বা বিভ্রান্তি হলে ৯৯৯-এ কল করুন (জাতীয় জরুরি সেবা) বা নিকটস্থ হাসপাতালে যান।',
+    sensitiveNote: 'সংবেদনশীল গোষ্ঠীর পরামর্শ আপনার জন্য প্রযোজ্য।', justNow: 'এইমাত্র', ago: '{d} আগে', mSuffix: 'মিনিট', hSuffix: 'ঘণ্টা', dSuffix: 'দিন', updatedAgo: '{t} ({ago})', beyond: 'AQI স্কেলের বাইরে (৫০০+)', officialLbl: 'ড্যাশবোর্ড AQI (EPA, নিরাপত্তা নিয়ম):', calcAqi: 'হিসাবকৃত AQI', timeDhaka: 'ঢাকার সময় (GMT+6)',
+  },
+};
+const t = (key, vars) => {
+  let s = (T[S.lang] && T[S.lang][key]) ?? T.en[key] ?? EN_DOM[key] ?? key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+};
+function applyLang() {
+  document.documentElement.lang = S.lang === 'bn' ? 'bn' : 'en';
+  $$('[data-i18n]').forEach((el) => { el.textContent = S.lang === 'bn' ? (T.bn[el.dataset.i18n] ?? EN_DOM[el.dataset.i18n]) : EN_DOM[el.dataset.i18n]; });
+  const lb = $('#langBtn');
+  lb.textContent = S.lang === 'bn' ? 'EN' : 'বাং';
+  lb.setAttribute('aria-label', S.lang === 'bn' ? 'Switch language to English' : 'Switch language to Bangla');
+}
+
+/* ---------- AQI categories and US EPA breakpoints ---------- */
+const CATS = [
+  { key: 'good', max: 50, color: '#00e400', ink: '#0b1a0b', en: 'Good', bn: 'ভালো' },
+  { key: 'moderate', max: 100, color: '#ffff00', ink: '#1a1a00', en: 'Moderate', bn: 'মাঝারি' },
+  { key: 'usg', max: 150, color: '#ff7e00', ink: '#1f0f00', en: 'Unhealthy for Sensitive Groups', bn: 'সংবেদনশীলদের জন্য অস্বাস্থ্যকর' },
+  { key: 'unhealthy', max: 200, color: '#ff0000', ink: '#1a0000', en: 'Unhealthy', bn: 'অস্বাস্থ্যকর' },
+  { key: 'very', max: 300, color: '#8f3f97', ink: '#ffffff', en: 'Very Unhealthy', bn: 'খুব অস্বাস্থ্যকর' },
+  { key: 'hazardous', max: Infinity, color: '#7e0023', ink: '#ffffff', en: 'Hazardous', bn: 'ঝুঁকিপূর্ণ' },
+];
+const catIndex = (aqi) => CATS.findIndex((c) => aqi <= c.max);
+const catName = (i) => (S.lang === 'bn' ? CATS[i].bn : CATS[i].en);
+
+// Rows: [C_lo, C_hi, I_lo, I_hi]. Units: PM µg/m³, NO2 ppb, CO ppm, O3 ppm.
+const COMMON = {
+  no2: { d: 0, rows: [[0, 53, 0, 50], [54, 100, 51, 100], [101, 360, 101, 150], [361, 649, 151, 200], [650, 1249, 201, 300], [1250, 2049, 301, 500]] },
+  co: { d: 1, rows: [[0, 4.4, 0, 50], [4.5, 9.4, 51, 100], [9.5, 12.4, 101, 150], [12.5, 15.4, 151, 200], [15.5, 30.4, 201, 300], [30.5, 50.4, 301, 500]] },
+  o3_8h: { d: 3, rows: [[0, 0.054, 0, 50], [0.055, 0.070, 51, 100], [0.071, 0.085, 101, 150], [0.086, 0.105, 151, 200], [0.106, 0.200, 201, 300]] },
+  o3_1h: { d: 3, rows: [[0.125, 0.164, 101, 150], [0.165, 0.204, 151, 200], [0.205, 0.404, 201, 300], [0.405, 0.604, 301, 500]] },
+};
+/** Current US EPA table (PM2.5 breakpoints revised in 2024). */
+const BP_2024 = { ...COMMON,
+  pm25: { d: 1, rows: [[0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]] },
+  pm10: { d: 0, rows: [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500]] },
+};
+/** Pre-2024 US EPA table, the one used to build the thesis CSV target. */
+const BP_THESIS = { ...COMMON,
+  pm25: { d: 1, rows: [[0, 12.0, 0, 50], [12.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 150.4, 151, 200], [150.5, 250.4, 201, 300], [250.5, 350.4, 301, 400], [350.5, 500.4, 401, 500]] },
+  pm10: { d: 0, rows: [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 504, 301, 400], [505, 604, 401, 500]] },
+};
+const trunc = (v, d) => { const p = 10 ** d; return Math.floor(v * p + 1e-6) / p; };
+function lin(rows, c) {
+  for (const [lo, hi, ilo, ihi] of rows) {
+    if (c <= hi) return { aqi: Math.round(((ihi - ilo) / (hi - lo)) * (Math.max(c, lo) - lo) + ilo), beyond: false };
+  }
+  return { aqi: 500, beyond: true };
+}
+/** Sub-index for one pollutant. value: pm25/pm10 µg/m³, no2 ppb, o3 ppb, co ppm. */
+function subIndex(table, pol, value) {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  if (pol === 'o3') {
+    const ppm = trunc(value / 1000, 3);
+    let best = ppm <= 0.200 ? lin(table.o3_8h.rows, ppm) : null;
+    if (ppm >= 0.125) { // 1-hour table where it is more protective (EPA guidance)
+      const one = lin(table.o3_1h.rows, ppm > 0.200 && ppm < 0.205 ? 0.205 : ppm);
+      if (!best || one.aqi > best.aqi) best = one;
+    }
+    return best;
+  }
+  const spec = table[pol];
+  return lin(spec.rows, trunc(value, spec.d));
+}
+const POLS = ['pm25', 'pm10', 'no2', 'o3', 'co'];
+const higher = (a, b) => (!a ? b : !b ? a : b.aqi > a.aqi ? b : a.aqi > b.aqi ? a : { aqi: a.aqi, beyond: a.beyond || b.beyond });
+/** Safety default: per pollutant, the higher of the 2024 and pre-2024 EPA tables (they differ for PM2.5, and PM10 above 424 µg/m³). */
+const SAFE = [BP_2024, BP_THESIS];
+/** Overall AQI = max sub-index. tables: one table or a list (higher value wins). Returns {aqi, beyond, dominant, subs, count}. */
+function computeAQI(r, tables = SAFE) {
+  const list = Array.isArray(tables) ? tables : [tables];
+  const subs = {}; let best = null; let dominant = null; let count = 0;
+  for (const p of POLS) {
+    const s = list.map((tb) => subIndex(tb, p, r[p])).reduce(higher, null); subs[p] = s;
+    if (s) { count++; if (!best || s.aqi > best.aqi) { best = s; dominant = p; } }
+  }
+  return best ? { aqi: best.aqi, beyond: best.beyond, dominant, subs, count } : { aqi: null, beyond: false, dominant: null, subs, count: 0 };
+}
+// µg/m³ -> ppb at 25 °C, 1 atm (molar volume 24.45 L).
+const MW = { no2: 46.0055, o3: 47.997, co: 28.010 };
+const ugToPpb = (ug, mw) => (ug == null ? null : (ug * 24.45) / mw);
+
+/* ---------- Random Forest (exported from scikit-learn) ---------- */
+const FEAT_KEYS = ['temp', 'hum', 'pm25', 'pm10', 'no2', 'o3', 'co'];
+/** Average of leaf values; go left when x[f] <= t. */
+function predictRF(x) {
+  let sum = 0;
+  for (const tr of MODEL.trees) {
+    let i = 0;
+    while (tr.l[i] !== -1) i = x[tr.f[i]] <= tr.t[i] ? tr.l[i] : tr.r[i];
+    sum += tr.v[i];
+  }
+  return sum / MODEL.trees.length;
+}
+function mlFor(r) {
+  const x = FEAT_KEYS.map((k) => r[k]);
+  if (x.some((v) => v == null || !Number.isFinite(v))) return null;
+  const out = [];
+  MODEL.features.forEach((f, i) => { const [lo, hi] = META.train_range[f]; if (x[i] < lo || x[i] > hi) out.push(`${f} (${lo}–${hi})`); });
+  return { pred: predictRF(x), out };
+}
+
+/* ---------- metric descriptors ---------- */
+const METRICS = [
+  { key: 'pm25', label: 'PM2.5', unit: 'µg/m³', dec: 1, pol: true },
+  { key: 'pm10', label: 'PM10', unit: 'µg/m³', dec: 0, pol: true },
+  { key: 'no2', label: 'NO2', unit: 'ppb', dec: 1, pol: true },
+  { key: 'o3', label: 'O3', unit: 'ppb', dec: 1, pol: true },
+  { key: 'co', label: 'CO', unit: 'ppm', dec: 2, pol: true },
+  { key: 'temp', label: 'Temperature', bn: 'তাপমাত্রা', unit: '°C', dec: 1, pol: false },
+  { key: 'hum', label: 'Humidity', bn: 'আর্দ্রতা', unit: '%', dec: 0, pol: false },
+];
+const mLabel = (m) => (S.lang === 'bn' && m.bn ? m.bn : m.label);
+const POL_NAME = { pm25: 'PM2.5', pm10: 'PM10', no2: 'NO2', o3: 'O3', co: 'CO' };
+const fmt = (v, d) => (v == null || !Number.isFinite(v) ? '--' : v.toFixed(d));
+
+function mkPoint(t, v) {
+  const p = { t, ...v };
+  const a = computeAQI(p);
+  p.aqi = a.aqi; p.beyond = a.beyond; p.info = a;
+  return p;
+}
+
+/* ---------- data sources ---------- */
+const SITES = {
+  dhaka: { lat: 23.8103, lon: 90.4125, en: 'Dhaka city', bn: 'ঢাকা শহর' },
+  badda: { lat: 23.7806, lon: 90.4266, en: 'Badda', bn: 'বাড্ডা' },
+  aftabnagar: { lat: 23.7687, lon: 90.4446, en: 'Aftabnagar', bn: 'আফতাবনগর' },
+};
+const AQ_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+const WX_URL = 'https://api.open-meteo.com/v1/forecast';
+const state = { source: null, current: null, prev: null, history: [], forecast: [], notice: null, stale: null, liveBuffer: [], loading: false };
+
+async function fetchJSON(url, opts = {}, ms = 12000) {
+  const ctl = new AbortController();
+  const id = setTimeout(() => ctl.abort(), ms);
+  try {
+    const res = await fetch(url, { ...opts, signal: ctl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(t('errTimeout'));
+    throw e;
+  } finally { clearTimeout(id); }
+}
+
+async function loadLive() {
+  const s = SITES[S.site] || SITES.dhaka;
+  const q = `latitude=${s.lat}&longitude=${s.lon}&timezone=Asia%2FDhaka&past_days=7&forecast_days=2`;
+  const vars = 'pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,us_aqi';
+  const [aq, wx] = await Promise.all([
+    fetchJSON(`${AQ_URL}?${q}&current=${vars}&hourly=${vars}`),
+    fetchJSON(`${WX_URL}?${q}&current=temperature_2m,relative_humidity_2m&hourly=temperature_2m,relative_humidity_2m`).catch(() => null),
+  ]);
+  if (!aq || !aq.current || !aq.hourly || !Array.isArray(aq.hourly.time)) throw new Error(t('errShape'));
+  const off = (aq.utc_offset_seconds ?? 21600) * 1000;
+  const toMs = (iso) => Date.parse(`${iso}Z`) - off;
+  const H = aq.hourly;
+  const wxIdx = new Map();
+  if (wx && wx.hourly && Array.isArray(wx.hourly.time)) wx.hourly.time.forEach((tm, i) => wxIdx.set(tm, i));
+  const conv = (o, i) => ({
+    pm25: o.pm2_5[i], pm10: o.pm10[i], no2: ugToPpb(o.nitrogen_dioxide[i], MW.no2), o3: ugToPpb(o.ozone[i], MW.o3),
+    co: o.carbon_monoxide[i] == null ? null : ugToPpb(o.carbon_monoxide[i], MW.co) / 1000, om: o.us_aqi ? o.us_aqi[i] : null,
+  });
+  const pts = H.time.map((tm, i) => {
+    const wi = wxIdx.get(tm);
+    return mkPoint(toMs(tm), { ...conv(H, i), temp: wi == null ? null : wx.hourly.temperature_2m[wi], hum: wi == null ? null : wx.hourly.relative_humidity_2m[wi] });
+  }).filter((p) => p.pm25 != null || p.pm10 != null);
+  const C = aq.current;
+  const cur = mkPoint(toMs(C.time), {
+    pm25: C.pm2_5, pm10: C.pm10, no2: ugToPpb(C.nitrogen_dioxide, MW.no2), o3: ugToPpb(C.ozone, MW.o3),
+    co: C.carbon_monoxide == null ? null : ugToPpb(C.carbon_monoxide, MW.co) / 1000, om: C.us_aqi ?? null,
+    temp: wx && wx.current ? wx.current.temperature_2m : null, hum: wx && wx.current ? wx.current.relative_humidity_2m : null,
+  });
+  if (cur.aqi == null) throw new Error(t('errShape'));
+  state.current = cur;
+  state.history = pts.filter((p) => p.t < cur.t).concat([cur]);
+  state.forecast = pts.filter((p) => p.t > cur.t).slice(0, 24);
+  state.prev = [...state.history].reverse().find((p) => p.t <= cur.t - 3600e3 + 60e3) || null;
+  const age = Date.now() - cur.t;
+  state.stale = age > 3 * 3600e3 ? { key: 'staleLive', vars: { age: fmtAge(age) } } : null;
+}
+
+const numU = (v) => { const n = typeof v === 'string' ? parseFloat(v) : v; return Number.isFinite(n) && n >= 0 ? n : null; };
+const numS = (v) => { const n = typeof v === 'string' ? parseFloat(v) : v; return Number.isFinite(n) ? n : null; };
+function normReading(r) {
+  if (!r || typeof r !== 'object') return null;
+  const tm = Date.parse(r.created_at ?? r.time ?? r.timestamp);
+  if (!Number.isFinite(tm)) return null;
+  const p = mkPoint(tm, { pm25: numU(r.pm25 ?? r.pm2_5), pm10: numU(r.pm10), no2: numU(r.no2_ppb ?? r.no2), o3: numU(r.o3_ppb ?? r.o3),
+    co: numU(r.co_ppm ?? r.co), temp: numS(r.temp_c ?? r.temp), hum: numU(r.humidity ?? r.hum), om: null });
+  return p.aqi == null ? null : p;
+}
+async function loadSensors() {
+  const c = S.sensor; let rows;
+  if (c.type === 'supabase') {
+    if (!c.url || !c.key) throw new Error(t('errSensorCfg'));
+    let url = `${c.url.replace(/\/+$/, '')}/rest/v1/${encodeURIComponent(c.table || 'readings')}?select=*&order=created_at.desc&limit=500`;
+    if (c.site) url += `&site=eq.${encodeURIComponent(c.site)}`;
+    rows = await fetchJSON(url, { headers: { apikey: c.key, Authorization: `Bearer ${c.key}` } });
+  } else if (c.type === 'thingspeak') {
+    if (!c.channel) throw new Error(t('errSensorCfg'));
+    const d = await fetchJSON(`https://api.thingspeak.com/channels/${encodeURIComponent(c.channel)}/feeds.json?results=500${c.key ? `&api_key=${encodeURIComponent(c.key)}` : ''}`);
+    rows = ((d && d.feeds) || []).map((f) => ({ created_at: f.created_at, pm25: f.field1, pm10: f.field2, no2_ppb: f.field3, o3_ppb: f.field4, co_ppm: f.field5, temp_c: f.field6, humidity: f.field7 }));
+  } else {
+    if (!c.url) throw new Error(t('errSensorCfg'));
+    const d = await fetchJSON(c.url, c.key ? { headers: { Authorization: `Bearer ${c.key}` } } : {});
+    rows = Array.isArray(d) ? d : (d && d.readings) || [];
+  }
+  if (!Array.isArray(rows)) throw new Error(t('errShape'));
+  const pts = rows.map(normReading).filter(Boolean).sort((a, b) => a.t - b.t);
+  if (!pts.length) throw new Error(t('errNoRows'));
+  state.current = pts[pts.length - 1];
+  state.prev = pts.length > 1 ? pts[pts.length - 2] : null;
+  state.history = pts; state.forecast = [];
+  const age = Date.now() - state.current.t;
+  state.stale = age > 15 * 60e3 ? { key: 'staleSensor', vars: { age: fmtAge(age) } } : null;
+}
+
+// Demo simulator: deterministic smooth noise on top of Dhaka-like daily cycles.
+const SCEN = {
+  typical: { pm: 95, no2: 28, o3: 30, co: 1.1, t: 27, h: 66 },
+  haze: { pm: 235, no2: 45, o3: 22, co: 2.2, t: 21, h: 72 },
+  clean: { pm: 18, no2: 9, o3: 28, co: 0.4, t: 29, h: 80 },
+};
+function rnd(i, seed) {
+  let x = Math.imul(i | 0, 374761393) ^ Math.imul(seed, 668265263);
+  x = Math.imul(x ^ (x >>> 13), 1274126177); x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+function vnoise(x, seed) { const i = Math.floor(x); const f = x - i; const u = f * f * (3 - 2 * f); const a = rnd(i, seed); return a + (rnd(i + 1, seed) - a) * u; }
+const gauss = (h, mu, sd) => Math.exp(-((h - mu) ** 2) / (2 * sd * sd));
+const r1 = (v) => Math.round(v * 10) / 10; const r2 = (v) => Math.round(v * 100) / 100;
+function demoPoint(tm) {
+  const sc = SCEN[S.demo] || SCEN.typical;
+  const h = ((tm / 3600e3) + 6) % 24; // Dhaka local hour
+  const diurnal = 1 + 0.35 * gauss(h, 8.5, 2) + 0.5 * gauss(h, 21.5, 2.5) - 0.3 * gauss(h, 15, 2.5);
+  const pm25 = sc.pm * diurnal * (0.78 + 0.34 * vnoise(tm / 2.7e6, 11) + 0.12 * (vnoise(tm / 9e4, 23) - 0.5)) * (0.85 + 0.3 * vnoise(tm / 8.64e7, 5));
+  const traffic = 0.55 + 0.6 * gauss(h, 9, 1.8) + 0.55 * gauss(h, 19, 2.2);
+  const sun = Math.max(0, Math.sin(((h - 6) / 12) * Math.PI));
+  const cyc = Math.cos(((h - 15) / 24) * 2 * Math.PI);
+  return mkPoint(tm, {
+    pm25: r1(pm25), pm10: Math.round(pm25 * (1.45 + 0.25 * vnoise(tm / 3.6e6, 31))),
+    no2: r1(sc.no2 * traffic * (0.8 + 0.4 * vnoise(tm / 1.8e6, 41))), o3: r1(4 + sc.o3 * sun ** 1.5 * (0.8 + 0.4 * vnoise(tm / 3.6e6, 53))),
+    co: r2(sc.co * traffic * (0.85 + 0.3 * vnoise(tm / 2.4e6, 61))), temp: r1(sc.t + 3.5 * cyc + (vnoise(tm / 7.2e6, 71) - 0.5)),
+    hum: r1(Math.min(98, sc.h - 11 * cyc + 4 * (vnoise(tm / 7.2e6, 83) - 0.5))), om: null,
+  });
+}
+function loadDemo() {
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  state.current = demoPoint(now);
+  state.prev = demoPoint(now - 3600e3);
+  state.history = []; // generated per range
+  state.forecast = Array.from({ length: 24 }, (_, i) => demoPoint(Math.floor(now / 3600e3 + i + 1) * 3600e3));
+  state.stale = null;
+}
+const RANGES = { '1h': { span: 3600e3, step: 30e3 }, '24h': { span: 86400e3, step: 600e3 }, '7d': { span: 7 * 86400e3, step: 3600e3 } };
+function historyFor(range) {
+  const R = RANGES[range]; const cur = state.current; if (!cur) return [];
+  if (state.source === 'demo' || state.source === 'fallback') {
+    const out = []; const end = cur.t;
+    for (let tm = end - R.span; tm < end; tm += R.step) out.push(demoPoint(tm));
+    out.push(cur); return out;
+  }
+  return state.history.filter((p) => p.t >= cur.t - R.span);
+}
+
+/* ---------- formatting helpers ---------- */
+const tf = (opts) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', ...opts });
+const fTime = tf({ hour: '2-digit', minute: '2-digit' });
+const fDay = tf({ weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const fFull = tf({ day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function fmtAge(ms) {
+  const m = Math.max(1, Math.round(ms / 60e3));
+  if (m < 60) return `${m} ${t('mSuffix')}`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h} ${t('hSuffix')}` : `${Math.round(h / 24)} ${t('dSuffix')}`;
+}
+
+/* ---------- gauge ---------- */
+const G = { cx: 160, cy: 168, r: 128, edges: [0, 50, 100, 150, 200, 300, 500] };
+const ang = (v) => 180 - (Math.min(Math.max(v, 0), 500) / 500) * 180;
+const pt = (deg, r) => [G.cx + r * Math.cos((deg * Math.PI) / 180), G.cy - r * Math.sin((deg * Math.PI) / 180)];
+function drawGauge() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const arcs = $('#gaugeArcs'); const ticks = $('#gaugeTicks');
+  for (let i = 0; i < 6; i++) {
+    const a1 = ang(G.edges[i]) - (i ? 0.6 : 0); const a2 = ang(G.edges[i + 1]) + (i < 5 ? 0.6 : 0);
+    const [x1, y1] = pt(a1, G.r); const [x2, y2] = pt(a2, G.r);
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', `M${x1.toFixed(2)} ${y1.toFixed(2)}A${G.r} ${G.r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`);
+    path.setAttribute('fill', 'none'); path.setAttribute('stroke', CATS[i].color); path.setAttribute('stroke-width', '22');
+    arcs.appendChild(path);
+  }
+  G.edges.forEach((v) => {
+    const a = ang(v); const end = v === 0 || v === 500;
+    const [x, y] = end ? pt(a, G.r) : pt(a, G.r + 22);
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', x.toFixed(1)); tx.setAttribute('y', (end ? G.cy + 20 : y + 3).toFixed(1)); tx.setAttribute('class', 'gauge-tick');
+    tx.setAttribute('text-anchor', end ? 'middle' : a > 100 ? 'end' : a < 80 ? 'start' : 'middle'); tx.textContent = String(v);
+    ticks.appendChild(tx);
+  });
+}
+let shownAqi = null;
+function setGauge(aqi, beyond) {
+  const needle = $('#needle'); const first = shownAqi == null;
+  if (first) needle.style.transition = 'none'; // first frame is final; later updates animate
+  needle.style.transform = `rotate(${(Math.min(aqi, 500) / 500) * 180}deg)`;
+  if (first) { needle.getBoundingClientRect(); needle.style.transition = ''; }
+  const el = $('#aqiNum'); const from = shownAqi; const to = aqi; shownAqi = aqi;
+  const label = beyond ? '500+' : String(to);
+  if (reduceMotion || first || from === to) { el.textContent = label; return; }
+  const t0 = performance.now(); const dur = 800;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur); const e = 1 - (1 - k) ** 3;
+    el.textContent = k < 1 ? String(Math.round(from + (to - from) * e)) : label;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/* ---------- health advice ---------- */
+const ADVICE = {
+  en: [
+    { head: 'Air quality is satisfactory.', gen: 'Enjoy outdoor activities.', sen: 'No special precautions needed.' },
+    { head: 'Acceptable for most people.', gen: 'Normal outdoor activity is fine.', sen: 'If you are unusually sensitive, shorten long or intense outdoor exercise.' },
+    { head: 'Sensitive groups may feel effects.', gen: 'Most people can stay active outdoors; take more breaks during long or intense activity.', sen: 'Reduce long or heavy outdoor exertion and take more breaks. Keep your medicine with you.' },
+    { head: 'Everyone may begin to feel health effects.', gen: 'Reduce long or intense outdoor exertion. A well-fitted N95/KN95 mask helps outdoors.', sen: 'Avoid long or intense outdoor activity. Move exercise indoors or reschedule it.' },
+    { head: 'Health alert: risk is increased for everyone.', gen: 'Avoid long or intense outdoor exertion. Keep windows closed and use an air purifier if you have one.', sen: 'Avoid all physical activity outdoors. Stay indoors with windows closed.' },
+    { head: 'Emergency conditions: everyone is likely to be affected.', gen: 'Avoid all outdoor physical activity. Stay indoors, keep doors and windows closed, run an air purifier.', sen: 'Remain indoors and keep activity low. Follow your treatment plan and seek medical help if symptoms appear.' },
+  ],
+  bn: [
+    { head: 'বায়ুমান সন্তোষজনক।', gen: 'বাইরের কাজ উপভোগ করুন।', sen: 'বিশেষ সতর্কতার দরকার নেই।' },
+    { head: 'বেশিরভাগ মানুষের জন্য গ্রহণযোগ্য।', gen: 'স্বাভাবিক বাইরের কাজ করা যায়।', sen: 'আপনি খুব সংবেদনশীল হলে দীর্ঘ বা ভারী ব্যায়াম কমান।' },
+    { head: 'সংবেদনশীলরা প্রভাব অনুভব করতে পারেন।', gen: 'বেশিরভাগ মানুষ বাইরে সক্রিয় থাকতে পারেন; দীর্ঘ কাজে বেশি বিরতি নিন।', sen: 'দীর্ঘ বা ভারী বাইরের পরিশ্রম কমান। ওষুধ সঙ্গে রাখুন।' },
+    { head: 'সবাই স্বাস্থ্যগত প্রভাব অনুভব করতে পারেন।', gen: 'দীর্ঘ বা ভারী বাইরের পরিশ্রম কমান। বাইরে ভালোভাবে লাগানো N95/KN95 মাস্ক সাহায্য করে।', sen: 'দীর্ঘ বা ভারী বাইরের কাজ এড়িয়ে চলুন। ব্যায়াম ঘরে করুন বা পিছিয়ে দিন।' },
+    { head: 'স্বাস্থ্য সতর্কতা: সবার ঝুঁকি বেড়েছে।', gen: 'দীর্ঘ বা ভারী বাইরের পরিশ্রম এড়িয়ে চলুন। জানালা বন্ধ রাখুন, এয়ার পিউরিফায়ার থাকলে চালান।', sen: 'বাইরে সব ধরনের শারীরিক কাজ এড়িয়ে চলুন। জানালা বন্ধ রেখে ঘরে থাকুন।' },
+    { head: 'জরুরি অবস্থা: সবাই আক্রান্ত হতে পারেন।', gen: 'বাইরের সব শারীরিক কাজ এড়িয়ে চলুন। ঘরে থাকুন, দরজা-জানালা বন্ধ রাখুন, এয়ার পিউরিফায়ার চালান।', sen: 'ঘরে থাকুন, কম পরিশ্রম করুন। চিকিৎসা পরিকল্পনা মেনে চলুন; উপসর্গ দেখা দিলে চিকিৎসা নিন।' },
+  ],
+};
+const PERSONA = {
+  en: {
+    child: 'Children breathe more air for their body size. Keep outdoor play short and move sports indoors when the AQI is above 100.',
+    senior: 'Older adults are more sensitive to particles. Avoid walks along busy roads when the AQI is above 100.',
+    asthma: 'Keep your reliever inhaler with you and follow your asthma action plan. Watch for coughing, wheezing or chest tightness.',
+    heart: 'Particles can strain the heart. Watch for chest pain, palpitations, shortness of breath or unusual tiredness, and contact your doctor if they appear.',
+  },
+  bn: {
+    child: 'শিশুরা শরীরের তুলনায় বেশি বাতাস নেয়। AQI ১০০-এর বেশি হলে বাইরের খেলা কমান, খেলাধুলা ঘরে করুন।',
+    senior: 'বয়স্করা ধূলিকণায় বেশি সংবেদনশীল। AQI ১০০-এর বেশি হলে ব্যস্ত রাস্তার পাশে হাঁটা এড়িয়ে চলুন।',
+    asthma: 'রিলিভার ইনহেলার সঙ্গে রাখুন এবং অ্যাজমা অ্যাকশন প্ল্যান মেনে চলুন। কাশি, শাঁ শাঁ শব্দ বা বুকে চাপ খেয়াল করুন।',
+    heart: 'ধূলিকণা হৃদযন্ত্রে চাপ দেয়। বুকে ব্যথা, ধড়ফড়, শ্বাসকষ্ট বা অস্বাভাবিক ক্লান্তি হলে ডাক্তারের সাথে যোগাযোগ করুন।',
+  },
+};
+const isSensitive = () => S.age !== 'adult' || S.cond !== 'none';
+function renderAdvice(aqiIdx) {
+  const box = $('#advice'); box.textContent = '';
+  if (aqiIdx < 0) return;
+  const lang = S.lang === 'bn' ? 'bn' : 'en'; const A = ADVICE[lang][aqiIdx]; const sens = isSensitive();
+  const head = document.createElement('div'); head.className = 'advice-head';
+  const chip = document.createElement('span'); chip.className = 'risk'; chip.textContent = catName(aqiIdx);
+  const h = document.createElement('strong'); h.textContent = A.head;
+  head.append(chip, h);
+  const ul = document.createElement('ul');
+  const add = (txt, bold) => { const li = document.createElement('li'); if (bold) { const b = document.createElement('b'); b.textContent = `${bold}: `; li.append(b); } li.append(txt); ul.append(li); };
+  add(sens ? A.sen : A.gen, t('yourRisk'));
+  if (sens) add(t('sensitiveNote'));
+  if (S.age !== 'adult' && aqiIdx >= 1) add(PERSONA[lang][S.age]);
+  if (S.cond !== 'none' && aqiIdx >= 1) add(PERSONA[lang][S.cond]);
+  box.append(head, ul);
+  if (aqiIdx >= 3 || (sens && aqiIdx >= 2)) { const em = document.createElement('p'); em.className = 'emergency'; em.textContent = t('emergency'); box.append(em); }
+}
+
+/* ---------- alerts + notifications ---------- */
+let lastNotified = { idx: -1, at: 0 };
+function renderAlert(cur) {
+  const box = $('#alert');
+  const levels = [cur.aqi, cur.om].filter((v) => Number.isFinite(v));
+  const alertAqi = Math.max(...levels); const idx = catIndex(alertAqi);
+  const show = idx >= 3 || (isSensitive() && idx >= 2);
+  box.hidden = !show;
+  if (!show) return;
+  const titleKey = idx >= 5 ? 'alertHaz' : idx === 4 ? 'alertVu' : idx === 3 ? 'alertUnh' : 'alertUsg';
+  box.style.setProperty('--alert-bg', CATS[idx].color); box.style.setProperty('--alert-ink', CATS[idx].ink);
+  const demo = state.source !== 'live' && state.source !== 'sensors';
+  const advice = (ADVICE[S.lang === 'bn' ? 'bn' : 'en'][idx])[isSensitive() ? 'sen' : 'gen'];
+  $('#alertTitle').textContent = (demo ? t('demoTag') : '') + t(titleKey);
+  $('#alertText').textContent = t('alertBody', { aqi: cur.beyond && alertAqi === cur.aqi ? '500+' : alertAqi, cat: catName(idx), advice, src: $('#srcText').textContent });
+  $('#alertNotifyBtn').hidden = !('Notification' in window) || S.notify;
+  if (S.notify && idx >= 3 && 'Notification' in window && Notification.permission === 'granted') {
+    const now = Date.now();
+    if (idx > lastNotified.idx || now - lastNotified.at > 30 * 60e3) {
+      try { new Notification((demo ? t('demoTag') : '') + t(titleKey), { body: `AQI ${alertAqi} · ${catName(idx)}`, tag: 'aqm-alert' }); } catch (e) { /* some browsers need a service worker */ }
+      lastNotified = { idx, at: now };
+    }
+  }
+  if (idx < 3) lastNotified = { idx: -1, at: 0 };
+}
+async function enableNotifications() {
+  const st = $('#notifyStatus');
+  if (!('Notification' in window)) { S.notify = false; $('#notify').checked = false; st.textContent = t('notifUnsupported'); toast(t('notifUnsupported')); return; }
+  let perm = Notification.permission;
+  try { if (perm === 'default') perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; }
+  S.notify = perm === 'granted'; $('#notify').checked = S.notify; saveSettings();
+  st.textContent = S.notify ? t('notifOn') : t('notifDenied'); toast(st.textContent);
+  if (state.current) renderAlert(state.current);
+}
+
+/* ---------- main render ---------- */
+function setSourceLabel() {
+  const pill = $('#srcPill'); pill.className = 'src-pill';
+  let txt;
+  if (state.source === 'live') { pill.classList.add('live'); const s = SITES[S.site] || SITES.dhaka; txt = t('srcLive', { site: S.lang === 'bn' ? s.bn : s.en }); }
+  else if (state.source === 'sensors') { pill.classList.add('sensor'); txt = t('srcSensor', { type: S.sensor.type }); }
+  else { pill.classList.add('demo'); txt = state.source === 'fallback' ? t('srcFallback') : t('srcDemo'); }
+  $('#srcText').textContent = txt;
+}
+function renderNotice() {
+  const n = $('#notice'); const msgs = [];
+  if (state.notice) msgs.push({ kind: state.notice.kind, text: t(state.notice.key, state.notice.vars) });
+  if (state.stale) msgs.push({ kind: 'warn', text: t(state.stale.key, state.stale.vars) });
+  if (!msgs.length) { n.hidden = true; return; }
+  n.hidden = false; n.className = `notice${msgs.some((m) => m.kind === 'warn') ? ' warn' : ''}`;
+  $('#noticeText').textContent = msgs.map((m) => m.text).join(' ');
+}
+function render() {
+  const cur = state.current; if (!cur) return;
+  setSourceLabel(); renderNotice();
+  const info = cur.info; const idx = catIndex(info.aqi); const cat = CATS[idx];
+  document.documentElement.style.setProperty('--cat', cat.color);
+  document.documentElement.style.setProperty('--cat-ink', cat.ink);
+  setGauge(info.aqi, info.beyond);
+  $('#catText').textContent = info.beyond ? `${catName(idx)} · ${t('beyond')}` : catName(idx);
+  $('#gauge').setAttribute('aria-label', `AQI ${info.beyond ? '500+' : info.aqi}, ${CATS[idx].en}`);
+  const d = info.dominant; const dm = METRICS.find((m) => m.key === d);
+  $('#dominant').textContent = d ? `${POL_NAME[d]} · ${fmt(cur[d], dm.dec)} ${dm.unit}` : '--';
+  const ageMs = Date.now() - cur.t;
+  $('#updated').textContent = t('updatedAgo', { t: fFull.format(cur.t), ago: ageMs < 60e3 ? t('justNow') : t('ago', { d: fmtAge(ageMs) }) });
+  $('#pollCount').textContent = info.count < 5 ? `${t('of5', { n: info.count })} · ${t('partial', { n: info.count })}` : t('of5', { n: 5 });
+  $('#omRow').hidden = !Number.isFinite(cur.om);
+  if (Number.isFinite(cur.om)) $('#omAqi').textContent = `${cur.om} · ${catName(catIndex(cur.om))}`;
+  renderMetrics(); renderML(cur); renderAdvice(idx); renderAlert(cur); renderHistory(); renderForecast();
+}
+function sparkSVG(vals) {
+  const v = vals.filter((x) => Number.isFinite(x)); if (v.length < 2) return '';
+  const lo = Math.min(...v); const hi = Math.max(...v); const span = hi - lo || 1;
+  const pts = v.map((x, i) => `${((i / (v.length - 1)) * 100).toFixed(2)},${(26 - ((x - lo) / span) * 22).toFixed(2)}`);
+  return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0,30 L${pts.join(' L')} L100,30Z"/><polyline points="${pts.join(' ')}"/></svg>`;
+}
+function renderMetrics() {
+  const cur = state.current; const prev = state.prev; const box = $('#metrics');
+  const trendLabel = t(state.source === 'sensors' ? 'vsPrev' : 'vs1h');
+  const hist = historyFor('24h');
+  box.textContent = '';
+  METRICS.forEach((m, i) => {
+    const card = document.createElement('article'); card.className = `metric${i === 0 ? ' wide' : ''}`;
+    const hd = document.createElement('header'); const h3 = document.createElement('h3'); h3.textContent = mLabel(m); hd.append(h3);
+    if (m.pol) {
+      const s = cur.info.subs[m.key]; const chip = document.createElement('span'); chip.className = 'sub-chip';
+      if (s) { const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = CATS[catIndex(s.aqi)].color; chip.append(dot, `AQI ${s.beyond ? '500+' : s.aqi}`); chip.title = catName(catIndex(s.aqi)); } else chip.textContent = 'n/a';
+      hd.append(chip);
+    }
+    const val = document.createElement('p'); val.className = 'val';
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = fmt(cur[m.key], m.dec);
+    const unit = document.createElement('span'); unit.className = 'unit'; unit.textContent = m.unit; val.append(num, unit);
+    const tr = document.createElement('p'); tr.className = 'trend';
+    const a = cur[m.key]; const b = prev ? prev[m.key] : null;
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+      const diff = a - b; const thr = Math.max(Math.abs(b) * 0.01, 10 ** -m.dec / 2);
+      if (Math.abs(diff) < thr) { tr.textContent = `▬ ${t('steady')} ${trendLabel}`; }
+      else {
+        const up = diff > 0; tr.classList.add(up ? 'up' : 'down'); if (m.pol) tr.classList.add('bad');
+        tr.textContent = `${up ? '▲' : '▼'} ${up ? '+' : '−'}${Math.abs(diff).toFixed(m.dec)} ${trendLabel}`;
+      }
+      tr.setAttribute('aria-label', `${m.label} ${tr.textContent}`);
+    } else tr.textContent = `– ${t('noPrev')}`;
+    card.append(hd, val, tr);
+    card.insertAdjacentHTML('beforeend', sparkSVG(hist.slice(-48).map((p) => p[m.key])));
+    box.append(card);
+  });
+}
+function renderML(cur) {
+  const ml = mlFor(cur); const calc = computeAQI(cur, BP_THESIS);
+  const warn = $('#mlWarn'); const msgs = [];
+  if (!ml) { $('#mlPred').textContent = '--'; $('#mlDiff').textContent = '--'; msgs.push(t('mlMissing')); }
+  else {
+    $('#mlPred').textContent = ml.pred.toFixed(1);
+    const diff = ml.pred - calc.aqi; $('#mlDiff').textContent = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(1)}`;
+    if (ml.out.length) msgs.push(t('mlOut', { list: ml.out.join(', '), lo: META.train_target_range[0], hi: META.train_target_range[1] }));
+  }
+  $('#mlCalc').textContent = calc.aqi == null ? '--' : calc.beyond ? '500+' : String(calc.aqi);
+  warn.hidden = !msgs.length; warn.textContent = msgs.join(' ');
+  const off = $('#mlOfficial'); off.textContent = '';
+  const idx = catIndex(cur.aqi); const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = CATS[idx].color;
+  const val = document.createElement('b'); val.style.whiteSpace = 'nowrap'; val.append(dot, ` ${cur.beyond ? '500+' : cur.aqi} · ${catName(idx)}`);
+  off.append(t('officialLbl'), val);
+}
+function renderModelMeta() {
+  const box = $('#modelMeta'); box.textContent = '';
+  const items = [
+    ['Trees / nodes', `${MODEL.trees.length} / ${META.n_nodes_total.toLocaleString('en')}`],
+    ['Training rows', `${META.n_train.toLocaleString('en')}`],
+    ['Random-split test', `R² ${META.random_split.R2} · RMSE ${META.random_split.RMSE}`],
+    ['Time-ordered test', `R² ${META.time_split.R2} · RMSE ${META.time_split.RMSE}`],
+  ];
+  items.forEach(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; d.append(k, b); box.append(d); });
+}
+
+/* ---------- charts ---------- */
+const CHART_METRICS = [{ key: 'aqi', label: 'AQI', unit: 'US AQI', dec: 0 }, ...METRICS];
+const bandsPlugin = {
+  id: 'aqiBands',
+  beforeDatasetsDraw(chart, args, opts) {
+    if (!opts || !opts.on) return;
+    const { ctx, chartArea: a, scales: { y } } = chart; ctx.save();
+    for (let i = 0; i < 6; i++) {
+      const y1 = Math.max(a.top, y.getPixelForValue(G.edges[i + 1])); const y2 = Math.min(a.bottom, y.getPixelForValue(G.edges[i]));
+      if (y2 > y1) { ctx.fillStyle = `${CATS[i].color}24`; ctx.fillRect(a.left, y1, a.right - a.left, y2 - y1); }
+    }
+    ctx.restore();
+  },
+};
+let histChart = null; let fcChart = null;
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function chartBase(isAqi, maxVal) {
+  const ink = css('--muted'); const grid = css('--line');
+  return {
+    responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 600 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { display: true, labels: { color: ink, boxWidth: 12, font: { size: 11 } } }, aqiBands: { on: isAqi }, tooltip: { padding: 10 } },
+    scales: {
+      x: { ticks: { color: ink, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, font: { size: 11 } }, grid: { display: false }, border: { color: grid } },
+      y: { min: isAqi ? 0 : undefined, max: isAqi ? Math.max(300, Math.ceil((maxVal + 20) / 50) * 50) : undefined, ticks: { color: ink, font: { size: 11 } }, grid: { color: grid }, border: { display: false } },
+    },
+  };
+}
+function renderHistory() {
+  const box = $('#histBox'); const empty = $('#histEmpty'); box.classList.remove('skeleton');
+  $$('#rangeTabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.range === S.range)));
+  $$('#metricChips .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.metric === S.metric)));
+  const pts = historyFor(S.range); const m = CHART_METRICS.find((x) => x.key === S.metric) || CHART_METRICS[0];
+  const vals = pts.map((p) => (Number.isFinite(p[m.key]) ? p[m.key] : null));
+  const note = $('#histNote');
+  note.textContent = `${state.source === 'live' ? (S.range === '1h' ? t('histLive1h') : t('histLive')) : state.source === 'sensors' ? t('histSensor', { n: pts.length }) : t('histDemo')} ${t('timeDhaka')}.`;
+  if (!window.Chart || vals.filter((v) => v != null).length < 2) {
+    empty.hidden = false; empty.textContent = window.Chart ? t('histEmpty') : 'Chart library did not load (offline?).';
+    if (histChart) { histChart.destroy(); histChart = null; } return;
+  }
+  empty.hidden = true;
+  const labFmt = S.range === '7d' ? fDay : fTime;
+  const labels = pts.map((p) => labFmt.format(p.t));
+  const accent = css('--accent');
+  const datasets = [{ label: `${mLabel(m)} (${m.unit})`, data: vals, borderColor: accent, backgroundColor: `${accent}22`, fill: m.key !== 'aqi', pointRadius: 0, borderWidth: 2, tension: 0.3, spanGaps: true }];
+  if (m.key === 'aqi' && state.source === 'live') datasets.push({ label: t('omAqiSeries'), data: pts.map((p) => p.om ?? null), borderColor: css('--muted'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.6, tension: 0.3, spanGaps: true });
+  const maxVal = Math.max(...datasets.flatMap((d) => d.data.filter((v) => v != null)));
+  if (histChart) histChart.destroy();
+  histChart = new Chart($('#histChart'), { type: 'line', data: { labels, datasets }, options: chartBase(m.key === 'aqi', maxVal) });
+  const nums = vals.filter((v) => v != null);
+  $('#histChart').setAttribute('aria-label', `${m.label} over ${S.range}: min ${Math.min(...nums).toFixed(m.dec)}, max ${Math.max(...nums).toFixed(m.dec)} ${m.unit}`);
+}
+function renderForecast() {
+  const box = $('#fcBox'); const empty = $('#fcEmpty'); box.classList.remove('skeleton');
+  const pill = $('#fcPill'); pill.className = 'src-pill';
+  const f = state.forecast; const note = $('#fcNote');
+  if (state.source === 'sensors' || !f.length) {
+    $('#fcSrc').textContent = t('fcSrcNone'); empty.hidden = false; empty.textContent = t('fcSensor'); note.textContent = '';
+    if (fcChart) { fcChart.destroy(); fcChart = null; } return;
+  }
+  const live = state.source === 'live';
+  pill.classList.add(live ? 'live' : 'demo'); $('#fcSrc').textContent = live ? t('fcSrcLive') : t('fcSrcDemo');
+  note.textContent = `${live ? t('fcLive') : t('fcDemo')} ${t('timeDhaka')}.`;
+  if (!window.Chart) { empty.hidden = false; empty.textContent = 'Chart library did not load (offline?).'; return; }
+  empty.hidden = true;
+  const datasets = [{ label: t('calcAqi'), data: f.map((p) => p.aqi), borderColor: css('--accent'), pointRadius: 2, borderWidth: 2, tension: 0.3 }];
+  if (live) datasets.push({ label: t('omAqiSeries'), data: f.map((p) => p.om ?? null), borderColor: css('--muted'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.6, tension: 0.3, spanGaps: true });
+  const maxVal = Math.max(...datasets.flatMap((d) => d.data.filter((v) => v != null)));
+  if (fcChart) fcChart.destroy();
+  fcChart = new Chart($('#fcChart'), { type: 'line', data: { labels: f.map((p) => fTime.format(p.t)), datasets }, options: chartBase(true, maxVal) });
+  const peak = f.reduce((a, b) => (b.aqi > a.aqi ? b : a), f[0]);
+  $('#fcChart').setAttribute('aria-label', `Forecast AQI for the next ${f.length} hours, peak ${peak.aqi} at ${fTime.format(peak.t)}`);
+}
+
+/* ---------- what-if calculator ---------- */
+const WI_FIELDS = [
+  { key: 'temp', label: 'Temperature', unit: '°C', step: '0.1' }, { key: 'hum', label: 'Humidity', unit: '%', step: '0.1' },
+  { key: 'pm25', label: 'PM2.5', unit: 'µg/m³', step: '0.1' }, { key: 'pm10', label: 'PM10', unit: 'µg/m³', step: '1' },
+  { key: 'no2', label: 'NO2', unit: 'ppb', step: '0.1' }, { key: 'o3', label: 'O3', unit: 'ppb', step: '0.1' }, { key: 'co', label: 'CO', unit: 'ppm', step: '0.01' },
+];
+const PRESETS = {
+  thesis: { v: { temp: 25, hum: 50, pm25: 20, pm10: 30, no2: 10, o3: 10, co: 0.5 }, note: 'wiThesis' },
+  median: { v: META.medians, note: 'wiMedian' },
+  clean: { v: { temp: 28, hum: 70, pm25: 6, pm10: 20, no2: 8, o3: 25, co: 0.3 }, note: 'wiClean' },
+  haz: { v: { temp: 20, hum: 75, pm25: 300, pm10: 420, no2: 60, o3: 5, co: 2 }, note: 'wiHaz' },
+};
+function buildWhatIf() {
+  const g = $('#wiGrid');
+  WI_FIELDS.forEach((f) => {
+    const w = document.createElement('div'); w.className = 'field';
+    const l = document.createElement('label'); l.htmlFor = `wi-${f.key}`; l.textContent = `${f.label} (${f.unit})`;
+    const i = document.createElement('input'); i.type = 'number'; i.id = `wi-${f.key}`; i.step = f.step; i.min = f.key === 'temp' ? '-30' : '0'; i.inputMode = 'decimal'; i.required = true;
+    w.append(l, i); g.append(w);
+  });
+  setPreset('thesis');
+}
+let presetNote = null;
+function setPreset(name) {
+  let vals; let noteKey;
+  if (name === 'now') { if (!state.current) return; vals = state.current; noteKey = 'wiNow'; }
+  else { vals = PRESETS[name].v; noteKey = PRESETS[name].note; }
+  WI_FIELDS.forEach((f) => { const v = vals[f.key]; $(`#wi-${f.key}`).value = Number.isFinite(v) ? String(Math.round(v * 100) / 100) : ''; });
+  presetNote = noteKey; $('#wiPresetNote').textContent = t(noteKey);
+  calcWhatIf();
+}
+function calcWhatIf() {
+  const r = {}; let bad = false;
+  WI_FIELDS.forEach((f) => { const el = $(`#wi-${f.key}`); const v = parseFloat(el.value); const ok = Number.isFinite(v) && (f.key === 'temp' || v >= 0); el.setAttribute('aria-invalid', String(!ok)); if (!ok) bad = true; r[f.key] = v; });
+  const err = $('#wiErr'); const out = $('#wiOut'); const warn = $('#wiWarn');
+  if (bad) { err.hidden = false; err.textContent = t('wiErr'); out.textContent = ''; warn.hidden = true; return; }
+  err.hidden = true;
+  const a24 = computeAQI(r); const ath = computeAQI(r, BP_THESIS); const ml = mlFor(r);
+  out.textContent = '';
+  const box = (lbl, val, idx) => {
+    const b = document.createElement('div'); b.className = 'ml-box';
+    const l = document.createElement('span'); l.className = 'lbl'; l.textContent = lbl;
+    const v = document.createElement('span'); v.className = 'big'; v.textContent = val;
+    b.append(l, v);
+    if (idx != null) { const c = document.createElement('span'); c.className = 'fine'; const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = CATS[idx].color; c.append(dot, ` ${catName(idx)}`); b.append(c); }
+    out.append(b);
+  };
+  box(t('epa2024'), a24.beyond ? '500+' : String(a24.aqi), catIndex(a24.aqi));
+  box(t('thesisAqi'), ath.beyond ? '500+' : String(ath.aqi), catIndex(ath.aqi));
+  box(t('mlAqi'), ml.pred.toFixed(1), catIndex(ml.pred));
+  warn.hidden = !ml.out.length;
+  warn.textContent = ml.out.length ? t('mlOut', { list: ml.out.join(', '), lo: META.train_target_range[0], hi: META.train_target_range[1] }) : '';
+}
+
+/* ---------- about section (numbers from the training run) ---------- */
+function renderAbout() {
+  const D = META.data;
+  $('#aboutText').textContent = `CSE400C capstone at East West University. A low-cost IoT node (PMSA003, MQ-7, MQ-131, Fermion MEMS NO2, DHT22) was placed in Badda and Aftabnagar, Dhaka. Readings were logged to CSV, converted to a US EPA AQI, and used to train regression models (Random Forest, LightGBM, KNN, SVM). This page re-ran the training on the thesis file ${D.file}: ${D.n_rows.toLocaleString('en')} rows with timestamps from ${D.spans.join(' and ')}. Every number in this section comes from that run.`;
+  const rows = [
+    ['Random 80/20 split (thesis-style)', META.random_split],
+    ['Time-ordered split (first 80% → last 20%)', META.time_split],
+    [`Train ${META.day_split.train_day} → test ${META.day_split.test_day}`, META.day_split],
+    ['Random split after removing duplicate rows', META.random_split_dedup],
+    ['Time-ordered, without PM2.5/PM10', META.time_split_no_pm],
+    ['LightGBM (default), random split', META.lgbm_random_split],
+    ['LightGBM (default), time-ordered', META.lgbm_time_split],
+  ];
+  const tb = $('#metricsTable tbody'); tb.textContent = '';
+  const addRow = (cells, cls) => { const tr = document.createElement('tr'); if (cls) tr.className = cls; cells.forEach((c, i) => { const td = document.createElement('td'); if (i) td.className = 'n'; td.textContent = c; tr.append(td); }); tb.append(tr); };
+  rows.forEach(([name, m]) => m && addRow([name, String(m.R2), String(m.RMSE), String(m.MAE), m.n_test.toLocaleString('en')]));
+  addRow(['Thesis claim: Random Forest', '0.9976', '≈1.8', '–', '–'], 'claim');
+  addRow(['Thesis claim: LightGBM', '0.9714', '≈4.2', '–', '–'], 'claim');
+  $('#metricsNote').textContent = `Random Forest: ${META.rf_params.n_estimators} trees, max_depth ${META.rf_params.max_depth}, min_samples_leaf ${META.rf_params.min_samples_leaf}, random_state ${META.rf_params.random_state}. The AQI target is the maximum of EPA sub-indices computed from the same inputs, so the model is learning a formula; high R² does not show forecasting skill. The 3 → 4 December test shows what happens when new days have PM2.5 levels the model never saw.`;
+  const it = $('#impTable tbody'); it.textContent = '';
+  Object.entries(META.importance_impurity).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+    const tr = document.createElement('tr'); const a = document.createElement('td'); a.textContent = k; const b = document.createElement('td'); b.className = 'n'; b.textContent = v.toFixed(4); tr.append(a, b); it.append(tr);
+  });
+  const dq = $('#dqList'); dq.textContent = '';
+  D.findings.forEach((f) => { const li = document.createElement('li'); li.textContent = f; dq.append(li); });
+}
+
+/* ---------- refresh loop ---------- */
+let nextAt = 0;
+async function refresh() {
+  if (state.loading) return;
+  state.loading = true;
+  let src = S.mode; let notice = null;
+  try {
+    if (S.mode === 'live') await loadLive();
+    else if (S.mode === 'sensors') await loadSensors();
+    else { loadDemo(); notice = { kind: 'info', key: 'noticeDemo' }; }
+  } catch (err) {
+    loadDemo(); src = 'fallback';
+    notice = { kind: 'warn', key: S.mode === 'live' ? 'noticeLiveFail' : 'noticeSensorFail', vars: { err: (err && err.message) || String(err) } };
+  }
+  state.source = src; state.notice = notice;
+  state.loading = false;
+  try { render(); } catch (e) { console.warn('render failed', e); }
+  nextAt = Date.now() + REFRESH_MS;
+}
+function tick() {
+  const s = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000));
+  $('#countdown').textContent = state.loading ? t('loading') : `${s} s`;
+  if (nextAt && Date.now() >= nextAt) refresh();
+}
+
+/* ---------- theme ---------- */
+function effectiveDark() { const th = document.documentElement.dataset.theme; return th ? th === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches; }
+function applyTheme() {
+  if (S.theme) document.documentElement.dataset.theme = S.theme; else delete document.documentElement.dataset.theme;
+  $('#themeBtn').setAttribute('aria-label', effectiveDark() ? 'Switch to light mode' : 'Switch to dark mode');
+  $('#themeBtn').innerHTML = effectiveDark()
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+}
+
+/* ---------- settings drawer ---------- */
+let lastFocus = null;
+function syncSensorFields() {
+  const ty = $('#sType').value;
+  $('#fUrl').hidden = ty === 'thingspeak'; $('#fTable').hidden = ty !== 'supabase'; $('#fSite').hidden = ty !== 'supabase'; $('#fChannel').hidden = ty !== 'thingspeak';
+  $('#sKeyLbl').textContent = ty === 'supabase' ? 'Anon key' : ty === 'thingspeak' ? 'Read API key (private channels)' : 'Bearer token (optional)';
+  $('label[for="sUrl"]').textContent = ty === 'supabase' ? 'Project URL' : 'JSON URL';
+  $('#sUrl').placeholder = ty === 'supabase' ? 'https://YOUR-PROJECT.supabase.co' : 'https://example.com/readings.json';
+}
+function syncModeFields() {
+  const m = ($('input[name="mode"]:checked') || {}).value || S.mode;
+  $('#fsLive').hidden = m !== 'live'; $('#fsSensors').hidden = m !== 'sensors';
+}
+function fillForm() {
+  $$('input[name="mode"]').forEach((r) => { r.checked = r.value === S.mode; });
+  $('#site').value = S.site; $('#demoScen').value = S.demo; $('#notify').checked = S.notify;
+  $('#sType').value = S.sensor.type; $('#sUrl').value = S.sensor.url; $('#sKey').value = S.sensor.key; $('#sTable').value = S.sensor.table; $('#sChannel').value = S.sensor.channel; $('#sSite').value = S.sensor.site;
+  syncSensorFields(); syncModeFields();
+  $('#notifyStatus').textContent = !('Notification' in window) ? t('notifUnsupported') : Notification.permission === 'denied' ? t('notifDenied') : S.notify ? t('notifOn') : t('notifOff');
+}
+function openDrawer() {
+  lastFocus = document.activeElement; fillForm();
+  const d = $('#drawer'); const sc = $('#scrim'); d.hidden = false; sc.hidden = false;
+  requestAnimationFrame(() => { d.classList.add('open'); sc.classList.add('open'); });
+  setTimeout(() => { const first = $('input[name="mode"]:checked') || $('#closeDrawer'); first.focus(); }, 50);
+  $('#settingsBtn').setAttribute('aria-expanded', 'true');
+}
+function closeDrawer() {
+  const d = $('#drawer'); const sc = $('#scrim'); d.classList.remove('open'); sc.classList.remove('open');
+  const done = () => { d.hidden = true; sc.hidden = true; };
+  if (reduceMotion) done(); else setTimeout(done, 280);
+  $('#settingsBtn').setAttribute('aria-expanded', 'false');
+  if (lastFocus && lastFocus.focus) lastFocus.focus();
+}
+function trapFocus(e) {
+  if (e.key !== 'Tab') return;
+  const f = $$('#drawer button, #drawer input, #drawer select').filter((el) => !el.closest('[hidden]') && !el.disabled);
+  if (!f.length) return;
+  const first = f[0]; const last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+let toastTimer = null;
+function toast(msg) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 2600); }
+
+/* ---------- wire up ---------- */
+function init() {
+  applyTheme(); applyLang(); drawGauge(); buildWhatIf(); renderAbout(); renderModelMeta();
+  $('#schemaCode').textContent = $('#schemaSrc').textContent; $('#sqlCode').textContent = $('#sqlSrc').textContent; $('#sketchCode').textContent = $('#sketchSrc').textContent;
+  const chips = $('#metricChips');
+  CHART_METRICS.forEach((m) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.metric = m.key; b.textContent = mLabel(m); b.setAttribute('aria-pressed', String(m.key === S.metric)); chips.append(b); });
+  $('#age').value = S.age; $('#cond').value = S.cond;
+  if (window.Chart) Chart.register(bandsPlugin);
+
+  $('#langBtn').addEventListener('click', () => {
+    S.lang = S.lang === 'bn' ? 'en' : 'bn'; saveSettings(); applyLang();
+    $$('#metricChips .chip').forEach((b) => { const m = CHART_METRICS.find((x) => x.key === b.dataset.metric); b.textContent = mLabel(m); });
+    if (presetNote) $('#wiPresetNote').textContent = t(presetNote);
+    calcWhatIf();
+    if (state.current) render();
+  });
+  $('#themeBtn').addEventListener('click', () => { S.theme = effectiveDark() ? 'light' : 'dark'; saveSettings(); applyTheme(); if (state.current) { renderHistory(); renderForecast(); } });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!S.theme) { applyTheme(); if (state.current) { renderHistory(); renderForecast(); } } });
+  $('#settingsBtn').addEventListener('click', openDrawer);
+  $('#closeDrawer').addEventListener('click', closeDrawer);
+  $('#scrim').addEventListener('click', closeDrawer);
+  $('#drawer').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); trapFocus(e); });
+  $$('input[name="mode"]').forEach((r) => r.addEventListener('change', syncModeFields));
+  $('#sType').addEventListener('change', syncSensorFields);
+  $('#notify').addEventListener('change', (e) => { if (e.target.checked) enableNotifications(); else { S.notify = false; saveSettings(); $('#notifyStatus').textContent = t('notifOff'); } });
+  $('#alertNotifyBtn').addEventListener('click', enableNotifications);
+  $('#settingsForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    S.mode = ($('input[name="mode"]:checked') || {}).value || 'live';
+    S.site = $('#site').value; S.demo = $('#demoScen').value;
+    S.sensor = { type: $('#sType').value, url: $('#sUrl').value.trim(), key: $('#sKey').value.trim(), table: $('#sTable').value.trim() || 'readings', channel: $('#sChannel').value.trim(), site: $('#sSite').value.trim() };
+    saveSettings(); closeDrawer(); toast(t('saved')); refresh();
+  });
+  $('#resetBtn').addEventListener('click', () => {
+    const keep = { lang: S.lang, theme: S.theme };
+    Object.assign(S, clone(DEFAULTS), keep); saveSettings(); fillForm(); toast(t('reset'));
+  });
+  $('#rangeTabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-range]'); if (!b) return; S.range = b.dataset.range; saveSettings(); renderHistory(); });
+  $('#rangeTabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const keys = Object.keys(RANGES); const i = keys.indexOf(S.range); S.range = keys[(i + (e.key === 'ArrowRight' ? 1 : keys.length - 1)) % keys.length];
+    saveSettings(); renderHistory(); $(`#rangeTabs button[data-range="${S.range}"]`).focus();
+  });
+  chips.addEventListener('click', (e) => { const b = e.target.closest('button[data-metric]'); if (!b) return; S.metric = b.dataset.metric; saveSettings(); renderHistory(); });
+  $('#age').addEventListener('change', (e) => { S.age = e.target.value; saveSettings(); if (state.current) { renderAdvice(catIndex(state.current.aqi)); renderAlert(state.current); } });
+  $('#cond').addEventListener('change', (e) => { S.cond = e.target.value; saveSettings(); if (state.current) { renderAdvice(catIndex(state.current.aqi)); renderAlert(state.current); } });
+  $$('[data-preset]').forEach((b) => b.addEventListener('click', () => setPreset(b.dataset.preset)));
+  $('#wiForm').addEventListener('submit', (e) => { e.preventDefault(); calcWhatIf(); });
+  $$('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+    const code = $(`#${b.dataset.copy}`);
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents(code); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); toast(t('copyFail')); };
+    try { navigator.clipboard.writeText(code.textContent).then(() => toast(t('copied')), fallback); } catch (e) { fallback(); }
+  }));
+
+  refresh();
+  setInterval(tick, 1000);
+}
+
+// Hooks for automated tests (no effect on the page).
+window.AQM = { computeAQI, subIndex, predictRF, mlFor, ugToPpb, MW, BP_2024, BP_THESIS, SAFE, catIndex, CATS, demoPoint, state, settings: S };
+init();
+})();
+</script>

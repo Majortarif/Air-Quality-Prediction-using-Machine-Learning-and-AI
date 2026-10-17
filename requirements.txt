@@ -1,0 +1,4 @@
+numpy
+pandas
+scikit-learn>=1.5
+lightgbm  # optional, only for the comparison in train.py
