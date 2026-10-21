@@ -1,4 +1,4 @@
-"""Explain the deployed Random Forest: SHAP (TreeExplainer), permutation importance and partial dependence.
+"""Explain the deployed Random Forest: SHAP (TreeExplainer), LIME, permutation importance and partial dependence.
 
 Usage:  python model/explain.py path/to/AQI_Ready_For_Streamlit.csv [out_dir]
         out_dir defaults to docs/explainability
@@ -184,6 +184,61 @@ for k, (a, f) in enumerate(zip(disp.axes_.ravel(), feats)):
 fig.suptitle("Partial dependence (thick line) and ICE curves (thin lines)", x=0.01, ha="left", fontsize=14, fontweight="bold", color=INK)
 fig.tight_layout()
 save(fig, "pdp_ice.png")
+
+# ---------------------------------------------------------------- LIME: local surrogate for single predictions
+from lime.lime_tabular import LimeTabularExplainer  # noqa: E402
+
+# Quartile-discretised LIME: each weight says how many AQI points "this feature is in this range" adds
+# or removes for that one prediction. Rows sit in an outer PM2.5 quartile, where a LIME surrogate is faithful;
+# its fit R² is printed on every panel.
+lime_explainer = LimeTabularExplainer(X[tr], feature_names=FEATURES, mode="regression", discretize_continuous=True,
+                                      discretizer="quartile", random_state=42)
+pred_te = rf.predict(Xte)
+pm_driven = Xte[:, FEATURES.index("CO")] < 50  # skip the CO sensor-glitch rows
+cases = []
+for label, target in [("Unhealthy", 185), ("Very Unhealthy", 280), ("Hazardous", 330)]:
+    k = int(np.argmin(np.where(pm_driven, np.abs(pred_te - target), np.inf)))
+    cases.append((label, k))
+
+
+def first(v):
+    return float(list(v.values())[0]) if isinstance(v, dict) else float(np.ravel(v)[0])
+
+
+res["lime"] = []
+fig, axes = plt.subplots(len(cases), 1, figsize=(11, 3.1 * len(cases)))
+for ax, (label, k) in zip(axes, cases):
+    exp = lime_explainer.explain_instance(Xte[k], rf.predict, num_features=7, num_samples=5000)
+    items = exp.as_list()
+    local, score, icpt = first(exp.local_pred), first(exp.score), first(exp.intercept)
+    res["lime"].append({
+        "category": label, "inputs": {f: round(float(v), 3) for f, v in zip(FEATURES, Xte[k])},
+        "actual_aqi": float(yte[k]), "rf_prediction": round(float(pred_te[k]), 2),
+        "lime_local_prediction": round(local, 2), "lime_intercept": round(icpt, 2), "lime_fit_r2": round(score, 3),
+        "weights": [[c, round(float(w), 3)] for c, w in items],
+    })
+    items = items[::-1]
+    names = [c for c, _ in items]
+    vals = [w for _, w in items]
+    cols = ["#c0392b" if v > 0 else ACC for v in vals]
+    bars = ax.barh(names, vals, color=cols, height=0.62)
+    span = max(abs(v) for v in vals) or 1
+    for b, v in zip(bars, vals):
+        txt = f"{v:+.1f}" if abs(v) >= 0.05 else "≈0"
+        ax.text(v + (span * 0.015 if v >= 0 else -span * 0.015), b.get_y() + b.get_height() / 2, txt,
+                va="center", ha="left" if v >= 0 else "right", color=INK, fontsize=10)
+    ax.axvline(0, color="#c9d3d8", lw=1)
+    ax.set_xlim(-span * 1.25, span * 1.25)
+    ax.grid(axis="x", color=GRID)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="y", labelsize=10)
+    ax.set_title(f"{label}  ·  actual AQI {yte[k]:.0f}  ·  Random Forest {pred_te[k]:.1f}  ·  "
+                 f"LIME local model {local:.1f} (fit R² {score:.2f})", fontsize=12, pad=8)
+axes[-1].set_xlabel("LIME weight (AQI points this condition adds or removes for that prediction)")
+fig.suptitle("LIME: local explanations for three single predictions", x=0.01, ha="left", fontsize=14,
+             fontweight="bold", color=INK)
+fig.tight_layout()
+save(fig, "lime_local.png")
 
 json.dump(res, open(os.path.join(OUT, "explain_results.json"), "w"), indent=2, ensure_ascii=False)
 print(json.dumps(res, indent=2, ensure_ascii=False))

@@ -22,7 +22,7 @@
   <a href="https://airqualitypredictionapp.netlify.app/">Open the app</a> ·
   <a href="#-how-it-works">How it works</a> ·
   <a href="#-the-model">The model</a> ·
-  <a href="#-explainability-shap-permutation-importance-and-pdp">Explainability</a> ·
+  <a href="#-explainability-shap-lime-permutation-importance-and-pdp">Explainability</a> ·
   <a href="#-connect-your-own-sensor">Connect a sensor</a> ·
   <a href="#-run-it-yourself">Run it yourself</a>
   </b>
@@ -110,9 +110,9 @@ We report the **time-ordered** score as the headline. The sensor logs about 119 
   <img src="docs/screenshots/trends-dark.png" width="100%" alt="24-hour AQI history with category bands, health advice panel, 24-hour forecast and the try-your-own-values form.">
 </p>
 
-## 🔍 Explainability: SHAP, permutation importance and PDP
+## 🔍 Explainability: SHAP, LIME, permutation importance and PDP
 
-Why does the forest predict what it predicts? `model/explain.py` rebuilds the exact forest the web app runs (checked against `model.json`, max difference 0.00025 AQI) and explains it three ways. Every number below is in [`docs/explainability/explain_results.json`](docs/explainability/explain_results.json). The charts were generated in October 2026 from the Random Forest that the web app uses.
+Why does the forest predict what it predicts? `model/explain.py` rebuilds the exact forest the web app runs (checked against `model.json`, max difference 0.00025 AQI) and explains it four ways. Every number below is in [`docs/explainability/explain_results.json`](docs/explainability/explain_results.json). The charts were generated in October 2026 from the Random Forest that the web app uses.
 
 **1. SHAP values** (`shap.TreeExplainer`, exact Shapley values for tree ensembles, 2,000 test rows). For every prediction, the base value (247.0, the average predicted AQI) plus the seven SHAP values equals the prediction, with a largest error of 4 × 10⁻¹³.
 
@@ -144,6 +144,16 @@ Why does the forest predict what it predicts? `model/explain.py` rebuilds the ex
 </p>
 
 - The PM2.5 curve lies on top of the **EPA formula for PM2.5** (red dashed line). PM10 adds about 1.5 AQI points above 250 µg/m³, and temperature and humidity are flat.
+
+**4. LIME** (local surrogate models for 3 single test predictions, 5,000 perturbed samples each, quartile bins). LIME fits a small weighted linear model around one prediction. It reports how many AQI points each "feature in this range" condition adds or removes.
+
+<p align="center">
+  <img src="docs/explainability/lime_local.png" width="100%" alt="LIME for three predictions: PM2.5 at or below 178 removes 73.8 AQI points for an Unhealthy reading; PM2.5 above 203 adds about 83 points for Very Unhealthy and Hazardous readings; every other condition stays within 1.8 points.">
+</p>
+
+- **Unhealthy** (actual AQI 185): "PM2.5 ≤ 178" removes **73.8** AQI points. Every other condition moves it by 1 point or less.
+- **Very Unhealthy** (actual 280) and **Hazardous** (actual 330): "PM2.5 > 203" adds about **83** points. The other conditions stay within ±1.8.
+- LIME is an approximation. Its local models reach fit R² 0.52–0.66 and land 10–32 AQI points from the forest's prediction. SHAP is exact for tree models (error 4 × 10⁻¹³), so we use SHAP for the overall picture and LIME to explain one prediction in plain words.
 
 **What this tells us.** The forest has learned the EPA AQI rule. In this dataset that rule is decided by PM2.5 in 62,170 of 62,188 rows. The explanations show that the model uses the right signal and does not react to temperature or humidity noise. They also show the next step: forecast future AQI from past readings and weather, instead of recomputing the current value.
 
@@ -208,7 +218,7 @@ python -m http.server 8000
 pip install -r requirements.txt
 python model/train.py path/to/AQI_Ready_For_Streamlit.csv model      # metrics.json + model.json
 python model/build.py path/to/AQI_Ready_For_Streamlit.csv model .    # rebuilds index.html
-python model/explain.py path/to/AQI_Ready_For_Streamlit.csv          # SHAP, permutation importance, PDP charts
+python model/explain.py path/to/AQI_Ready_For_Streamlit.csv          # SHAP, LIME, permutation importance, PDP charts
 ```
 
 ## 📁 Project structure
@@ -219,13 +229,13 @@ python model/explain.py path/to/AQI_Ready_For_Streamlit.csv          # SHAP, per
 ├── model/
 │   ├── train.py          # train + evaluate + export the forest to JSON + verify
 │   ├── build.py          # embeds model.json and metrics into the page
-│   ├── explain.py        # SHAP, permutation importance and PDP/ICE for the deployed forest
+│   ├── explain.py        # SHAP, LIME, permutation importance and PDP/ICE for the deployed forest
 │   ├── app.src.html      # page source before the model is embedded
 │   ├── model.json        # exported Random Forest (40 trees)
 │   └── metrics.json      # model metrics from the training run
 ├── docs/
 │   ├── banner.svg
-│   ├── explainability/   # SHAP, permutation and PDP charts + explain_results.json
+│   ├── explainability/   # SHAP, LIME, permutation and PDP charts + explain_results.json
 │   └── screenshots/
 └── requirements.txt
 ```
