@@ -22,6 +22,7 @@
   <a href="https://airqualitypredictionapp.netlify.app/">Open the app</a> ·
   <a href="#-how-it-works">How it works</a> ·
   <a href="#-the-model">The model</a> ·
+  <a href="#-explainability-shap-permutation-importance-and-pdp">Explainability</a> ·
   <a href="#-connect-your-own-sensor">Connect a sensor</a> ·
   <a href="#-run-it-yourself">Run it yourself</a>
   </b>
@@ -109,6 +110,43 @@ We report the **time-ordered** score as the headline. The sensor logs about 119 
   <img src="docs/screenshots/trends-dark.png" width="100%" alt="24-hour AQI history with category bands, health advice panel, 24-hour forecast and the try-your-own-values form.">
 </p>
 
+## 🔍 Explainability: SHAP, permutation importance and PDP
+
+Why does the forest predict what it predicts? `model/explain.py` rebuilds the exact forest the web app runs (checked against `model.json`, max difference 0.00025 AQI) and explains it three ways. Every number below is in [`docs/explainability/explain_results.json`](docs/explainability/explain_results.json). The charts were generated in October 2026 from the Random Forest that the web app uses.
+
+**1. SHAP values** (`shap.TreeExplainer`, exact Shapley values for tree ensembles, 2,000 test rows). For every prediction, the base value (247.0, the average predicted AQI) plus the seven SHAP values equals the prediction, with a largest error of 4 × 10⁻¹³.
+
+<p align="center">
+  <img src="docs/explainability/shap_beeswarm.png" width="100%" alt="SHAP beeswarm: PM2.5 spreads from about -78 to +128 AQI points, high PM2.5 pushes the AQI up; every other feature stays near zero.">
+</p>
+
+- PM2.5 moves a prediction anywhere from **−78 to +128 AQI points**, and high PM2.5 (red) always pushes the AQI up. PM10 stays within −1 to +2 points. The other five features stay close to 0.
+- Mean |SHAP|: PM2.5 **31.0** · PM10 0.46 · O₃ 0.06 · CO 0.04 · temperature, humidity, NO₂ ≈ 0.
+
+<p align="center">
+  <img src="docs/explainability/shap_dependence_pm25.png" width="100%" alt="SHAP dependence of PM2.5: the SHAP value rises almost linearly with PM2.5, with a change of slope near 150 µg/m³.">
+</p>
+
+- The PM2.5 effect rises almost in a straight line, and the slope changes near **150 µg/m³**. That is where the EPA AQI moves from the 151–200 band to the 201–300 band.
+
+**2. Permutation importance** (12,438 test rows, 10 repeats). Each feature is shuffled in turn, and we measure how much R² the model loses.
+
+<p align="center">
+  <img src="docs/explainability/permutation_importance.png" width="100%" alt="Permutation importance: shuffling PM2.5 drops R² by 1.936; every other feature costs less than 0.005.">
+</p>
+
+- Shuffling PM2.5 drops R² by **1.94**, from 0.9998 to about −0.94, which is worse than always predicting the mean. Every other feature costs less than 0.005.
+
+**3. Partial dependence (PDP) and ICE curves** (1,500 test rows, 120 ICE lines per feature).
+
+<p align="center">
+  <img src="docs/explainability/pdp_ice.png" width="100%" alt="Partial dependence: the PM2.5 curve lies on the EPA formula line; PM10, temperature and humidity are flat.">
+</p>
+
+- The PM2.5 curve lies on top of the **EPA formula for PM2.5** (red dashed line). PM10 adds about 1.5 AQI points above 250 µg/m³, and temperature and humidity are flat.
+
+**What this tells us.** The forest has learned the EPA AQI rule. In this dataset that rule is decided by PM2.5 in 62,170 of 62,188 rows. The explanations show that the model uses the right signal and does not react to temperature or humidity noise. They also show the next step: forecast future AQI from past readings and weather, instead of recomputing the current value.
+
 ## 🧪 AQI engine, tested
 
 The AQI code was run on 17 test cases, including the worked examples in the US EPA technical guidance. All 17 pass.
@@ -170,6 +208,7 @@ python -m http.server 8000
 pip install -r requirements.txt
 python model/train.py path/to/AQI_Ready_For_Streamlit.csv model      # metrics.json + model.json
 python model/build.py path/to/AQI_Ready_For_Streamlit.csv model .    # rebuilds index.html
+python model/explain.py path/to/AQI_Ready_For_Streamlit.csv          # SHAP, permutation importance, PDP charts
 ```
 
 ## 📁 Project structure
@@ -180,11 +219,13 @@ python model/build.py path/to/AQI_Ready_For_Streamlit.csv model .    # rebuilds 
 ├── model/
 │   ├── train.py          # train + evaluate + export the forest to JSON + verify
 │   ├── build.py          # embeds model.json and metrics into the page
+│   ├── explain.py        # SHAP, permutation importance and PDP/ICE for the deployed forest
 │   ├── app.src.html      # page source before the model is embedded
 │   ├── model.json        # exported Random Forest (40 trees)
 │   └── metrics.json      # model metrics from the training run
 ├── docs/
 │   ├── banner.svg
+│   ├── explainability/   # SHAP, permutation and PDP charts + explain_results.json
 │   └── screenshots/
 └── requirements.txt
 ```
